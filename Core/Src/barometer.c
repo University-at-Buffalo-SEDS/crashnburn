@@ -6,7 +6,7 @@ static inline void baro_cs_high() { HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROM
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
 {
     // Example: write a single config/mode byte
-    uint8_t reg_byte = (1 << 7) | CMD;
+    uint8_t reg_byte = (0 << 7) | CMD;
     uint8_t mode_buffer[4] = {reg_byte, BAROMETER_SOFTRESET, reg_byte, BAROMETER_NORMAL_MODE};
     // set gpio pin low
     baro_cs_low();
