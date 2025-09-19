@@ -1,5 +1,9 @@
 /.vscode
 /build
-.DS_Store
 /.settings
 /.clangd
+.DS_Store
+CMakeCache.txt
+build.ninja
+compile_commands.json
+CMakePresets.json
