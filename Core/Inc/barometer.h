@@ -89,7 +89,7 @@ int8_t par_p8;
 int16_t par_p9;
 int8_t par_p10;
 int8_t par_p11;
-uint16_t t_lin;
+float t_lin;
 } calib_data;
 
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
