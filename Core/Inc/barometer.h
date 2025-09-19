@@ -3,7 +3,7 @@
 #include "BMP390.h"
 
 #define BAROMTER_POWER_CONTROl_REGISTER PWR_CTRL
-#define BAROMETER_PRESSURE_REGISTER 
+#define BAROMETER_SOFTRESET 0xB6
 #define BAROMETER_GPIO_PIN GPIO_PIN_13
 #define BAROMETER_GPIO_PORT GPIOB
 
@@ -24,7 +24,6 @@
 #define BAROMETER_INITIALIZATION_TIMEOUT    50U
 #define BAROMETER_READ_BIT                  0x80
 #define BAROMETER_READ_TIMEOUT              10U
-
 
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
 
