@@ -9,8 +9,9 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
     // register address (= full register address without bit 7) and the write command (bit7 = RW = ‘0’). Several pairs can be written
     // without raising CSB. The transaction is ended by a raising CSB. 
 
-    uint8_t reg_byte = BAROMETER_SPI_WRITE & CMD;
-    uint8_t mode_buffer[4] = {reg_byte, BAROMETER_SOFTRESET, reg_byte, BAROMETER_NORMAL_MODE};
+    uint8_t cmd_reg = BAROMETER_SPI_WRITE & CMD;
+    uint8_t osr_reg = BAROMETER_SPI_WRITE & OSR;
+    uint8_t mode_buffer[6] = {cmd_reg, BAROMETER_SOFTRESET, cmd_reg, BAROMETER_NORMAL_MODE, osr_reg, PRESSURE_RES_HIGH};
     // set gpio pin low
     baro_cs_low();
     HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, mode_buffer, (uint16_t)sizeof(mode_buffer), BAROMETER_INITIALIZATION_TIMEOUT);
