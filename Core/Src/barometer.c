@@ -53,7 +53,7 @@ HAL_StatusTypeDef barometer_read_pressure(SPI_HandleTypeDef *hspi, uint8_t reg, 
 }
 static float BMP390_compensate_pressure(uint32_t uncomp_press, struct BMP390_calib_data *calib_data)
 {
-    //0x30 .. 0x57
+    // 0x30 .. 0x57
     /* Variable to store the compensated pressure */
     float comp_press;
     /* Temporary variables used for compensation */
@@ -79,4 +79,19 @@ static float BMP390_compensate_pressure(uint32_t uncomp_press, struct BMP390_cal
     partial_data4 = partial_data3 + ((float)uncomp_press * (float)uncomp_press * (float)uncomp_press) * calib_data->par_p11;
     comp_press = partial_out1 + partial_out2 + partial_data4;
     return comp_press;
+}
+
+static float BMP390_compensate_temperature(uint32_t uncomp_temp, struct BMP390_calib_data *calib_data)
+{
+    float partial_data1;
+    float partial_data2;
+        partial_data1 = (float)(uncomp_temp - calib_data->par_t1);
+
+        partial_data2 = (float)(partial_data1 * calib_data->par_t2);
+
+        /* Update the compensated temperature in calib structure since this is
+         * needed for pressure calculation */
+        calib_data->t_lin = partial_data2 + (partial_data1 * partial_data1) * calib_data->par_t3;
+        /* Returns compensated temperature */
+        return calib_data->t_lin;
 }
