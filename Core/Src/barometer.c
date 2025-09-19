@@ -26,16 +26,17 @@ HAL_StatusTypeDef barometer_read_pressure(SPI_HandleTypeDef *hspi, uint8_t reg, 
     // Reading is done by lowering CSB and first sending one control byte. The control bytes consist of the SPI register address (=
     // full register address without bit 7) and the read command (bit 7 = RW = ‘1’). After writing the control byte, one dummy byte
     // is sent and there after data bytes. The register address is automatically incremented.
+    
     uint8_t reg_byte = BAROMETER_SPI_READ | reg;
 
     // TX buffer: first byte is the register, the rest are dummy (0xFF)
     uint8_t tx_buf[out_len + 1];
-    uint8_t rx_buf[out_len + 1]; // includes echo of reg + returned data
+    uint8_t rx_buf[out_len + 1]; 
 
     tx_buf[0] = reg_byte;
     for (uint16_t i = 1; i <= out_len; i++)
     {
-        tx_buf[i] = 0xFF; // dummy bytes to clock data out
+        tx_buf[i] = 0xFF;
     }
 
     baro_cs_low();
