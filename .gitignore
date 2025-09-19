@@ -1,6 +1,6 @@
 /.vscode
 /build
-/.DS_Store
+.DS_Store
 /.settings
 /.clangd
 .DS_Store
