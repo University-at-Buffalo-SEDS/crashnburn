@@ -7,7 +7,7 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
 {
     // Writing is done by lowering CSB and sending pairs control bytes and register data. The control bytes consist of the SPI
     // register address (= full register address without bit 7) and the write command (bit7 = RW = ‘0’). Several pairs can be written
-    // without raising CSB. The transaction is ended by a raising CSB. 
+    // without raising CSB. The transaction is ended by a raising CSB.
 
     uint8_t cmd_reg = BAROMETER_SPI_WRITE & CMD;
     uint8_t osr_reg = BAROMETER_SPI_WRITE & OSR;
