@@ -5,13 +5,16 @@ static inline void baro_cs_high() { HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROM
 
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
 {
-    // Example: write a single config/mode byte
+    // Writing is done by lowering CSB and sending pairs control bytes and register data. The control bytes consist of the SPI
+    // register address (= full register address without bit 7) and the write command (bit7 = RW = ‘0’). Several pairs can be written
+    // without raising CSB. The transaction is ended by a raising CSB. 
+
     uint8_t reg_byte = BAROMETER_SPI_WRITE | CMD;
     uint8_t mode_buffer[4] = {reg_byte, BAROMETER_SOFTRESET, reg_byte, BAROMETER_NORMAL_MODE};
     // set gpio pin low
     baro_cs_low();
     HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, mode_buffer, (uint16_t)sizeof(mode_buffer), BAROMETER_INITIALIZATION_TIMEOUT);
-    
+
     baro_cs_high();
 
     return st;
@@ -19,8 +22,9 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
 
 HAL_StatusTypeDef barometer_read_pressure(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out_data, uint16_t out_len)
 {
-    // to read from a register, we need to set bit 7 to the command value then the rest (bits 1-6) to the register address.
-
+    // Reading is done by lowering CSB and first sending one control byte. The control bytes consist of the SPI register address (=
+    // full register address without bit 7) and the read command (bit 7 = RW = ‘1’). After writing the control byte, one dummy byte
+    // is sent and there after data bytes. The register address is automatically incremented.
     uint8_t reg_byte = BAROMETER_SPI_READ & reg;
 
     // TX buffer: first byte is the register, the rest are dummy (0xFF)
