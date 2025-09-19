@@ -21,7 +21,7 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
     return st;
 }
 
-HAL_StatusTypeDef barometer_read_pressure(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out_data, uint16_t out_len)
+HAL_StatusTypeDef barometer_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out_data, uint16_t out_len)
 {
     // Reading is done by lowering CSB and first sending one control byte. The control bytes consist of the SPI register address (=
     // full register address without bit 7) and the read command (bit 7 = RW = ‘1’). After writing the control byte, one dummy byte
@@ -51,6 +51,9 @@ HAL_StatusTypeDef barometer_read_pressure(SPI_HandleTypeDef *hspi, uint8_t reg, 
     }
     return st;
 }
+
+
+
 static float BMP390_compensate_pressure(uint32_t uncomp_press, struct BMP390_calib_data *calib_data)
 {
     // 0x30 .. 0x57

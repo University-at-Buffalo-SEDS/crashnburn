@@ -72,25 +72,27 @@
 #define BAROMETER_READ_BIT 0x80
 #define BAROMETER_READ_TIMEOUT 10U
 
-
-
-struct BMP390_calib_data{
-uint16_t par_t1;
-uint16_t par_t2;
-int8_t par_t3;
-int16_t par_p1;
-int16_t par_p2;
-int8_t par_p3;
-int8_t par_p4;
-int16_t par_p5;
-uint16_t par_p6;
-int8_t par_p7;
-int8_t par_p8;
-int16_t par_p9;
-int8_t par_p10;
-int8_t par_p11;
-float t_lin;
+static struct BMP390_calib_data
+{
+    uint16_t par_t1;
+    uint16_t par_t2;
+    int8_t par_t3;
+    int16_t par_p1;
+    int16_t par_p2;
+    int8_t par_p3;
+    int8_t par_p4;
+    int16_t par_p5;
+    uint16_t par_p6;
+    int8_t par_p7;
+    int8_t par_p8;
+    int16_t par_p9;
+    int8_t par_p10;
+    int8_t par_p11;
+    float t_lin;
 } calib_data;
+
+static float BMP390_compensate_pressure(uint32_t uncomp_press, struct BMP390_calib_data *calib_data);
+static float BMP390_compensate_temperature(uint32_t uncomp_temp, struct BMP390_calib_data *calib_data);
 
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
 
