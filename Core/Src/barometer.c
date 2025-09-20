@@ -40,32 +40,36 @@ static inline HAL_StatusTypeDef read_trim_pars(SPI_HandleTypeDef *hspi)
 
     // Lookup table for all calibration fields
     TrimEntry table[] = {
-        { NVM_PAR_T1,  FIELD_U16, &calib_data.par_t1 },
-        { NVM_PAR_T2,  FIELD_U16, &calib_data.par_t2 },
-        { NVM_PAR_T3,  FIELD_U8,  &calib_data.par_t3 },
-        { NVM_PAR_P1,  FIELD_U16, &calib_data.par_p1 },
-        { NVM_PAR_P2,  FIELD_U16, &calib_data.par_p2 },
-        { NVM_PAR_P3,  FIELD_U8,  &calib_data.par_p3 },
-        { NVM_PAR_P4,  FIELD_U8,  &calib_data.par_p4 },
-        { NVM_PAR_P5,  FIELD_U16, &calib_data.par_p5 },
-        { NVM_PAR_P6,  FIELD_U16, &calib_data.par_p6 },
-        { NVM_PAR_P7,  FIELD_U8,  &calib_data.par_p7 },
-        { NVM_PAR_P8,  FIELD_U8,  &calib_data.par_p8 },
-        { NVM_PAR_P9,  FIELD_U16, &calib_data.par_p9 },
-        { NVM_PAR_P10, FIELD_U8,  &calib_data.par_p10 },
-        { NVM_PAR_P11, FIELD_U8,  &calib_data.par_p11 },
+        {NVM_PAR_T1, FIELD_U16, &calib_data.par_t1},
+        {NVM_PAR_T2, FIELD_U16, &calib_data.par_t2},
+        {NVM_PAR_T3, FIELD_U8, &calib_data.par_t3},
+        {NVM_PAR_P1, FIELD_U16, &calib_data.par_p1},
+        {NVM_PAR_P2, FIELD_U16, &calib_data.par_p2},
+        {NVM_PAR_P3, FIELD_U8, &calib_data.par_p3},
+        {NVM_PAR_P4, FIELD_U8, &calib_data.par_p4},
+        {NVM_PAR_P5, FIELD_U16, &calib_data.par_p5},
+        {NVM_PAR_P6, FIELD_U16, &calib_data.par_p6},
+        {NVM_PAR_P7, FIELD_U8, &calib_data.par_p7},
+        {NVM_PAR_P8, FIELD_U8, &calib_data.par_p8},
+        {NVM_PAR_P9, FIELD_U16, &calib_data.par_p9},
+        {NVM_PAR_P10, FIELD_U8, &calib_data.par_p10},
+        {NVM_PAR_P11, FIELD_U8, &calib_data.par_p11},
     };
 
-    for (size_t i = 0; i < sizeof(table)/sizeof(table[0]); i++) {
+    for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); i++)
+    {
         size_t len = (table[i].type == FIELD_U16) ? 2 : 1;
 
         st = barometer_read_reg(hspi, table[i].reg, buf, len);
         if (st != HAL_OK)
             return st;
 
-        if (table[i].type == FIELD_U16) {
+        if (table[i].type == FIELD_U16)
+        {
             *(uint16_t *)table[i].dest = (buf[0] << 8) | buf[1];
-        } else {
+        }
+        else
+        {
             *(uint8_t *)table[i].dest = buf[0];
         }
     }
@@ -88,13 +92,13 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
     HAL_StatusTypeDef st;
     st = HAL_SPI_Transmit(hspi, mode_buffer, (uint16_t)sizeof(mode_buffer), BAROMETER_INITIALIZATION_TIMEOUT);
     if (st != HAL_OK)
-        goto early_finish;
+    {
+        BARO_CS_HIGH;
+        return st;
+    }
 
     st = read_trim_pars(hspi);
 
-    BARO_CS_HIGH;
-    return st;
-early_finish:        
     BARO_CS_HIGH;
     return st;
 }
@@ -108,7 +112,7 @@ float BMP390_compensate_pressure(uint32_t uncomp_press, struct BMP390_calib_data
     float partial_data4;
     float partial_out1;
     float partial_out2;
-    
+
     /* Calibration data */
     partial_data1 = calib_data->par_p6 * calib_data->t_lin;
     partial_data2 = calib_data->par_p7 * (calib_data->t_lin * calib_data->t_lin);
@@ -134,7 +138,7 @@ float BMP390_compensate_temperature(uint32_t uncomp_temp, struct BMP390_calib_da
     float partial_data2 = (float)(partial_data1 * calib_data->par_t2);
 
     /* Update the compensated temperature in calib structure since this is
-        * needed for pressure calculation */
+     * needed for pressure calculation */
     calib_data->t_lin = partial_data2 + (partial_data1 * partial_data1) * calib_data->par_t3;
 
     /* Returns compensated temperature */
