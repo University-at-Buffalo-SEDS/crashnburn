@@ -123,8 +123,8 @@ typedef struct
     void *dest;
 } TrimEntry;
 
-float BMP390_compensate_pressure(uint32_t uncomp_press, struct BMP390_calib_data *calib_data);
-float BMP390_compensate_temperature(uint32_t uncomp_temp, struct BMP390_calib_data *calib_data);
+float BMP390_compensate_pressure(uint32_t uncomp_press);
+float BMP390_compensate_temperature(uint32_t uncomp_temp);
 
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
 
