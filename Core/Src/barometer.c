@@ -32,69 +32,45 @@ HAL_StatusTypeDef barometer_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8
 }
 
 /* Read calibration data from NVM registers (0x31-45). */
+
 static inline HAL_StatusTypeDef read_trim_pars(SPI_HandleTypeDef *hspi)
 {
     HAL_StatusTypeDef st;
-    uint8_t hold_1byte[1];
-    uint8_t hold_2bytes[2];
+    uint8_t buf[2];
 
-    if ((st = barometer_read_reg(hspi, NVM_PAR_T1, hold_2bytes, 2)) != HAL_OK)
-        return st;
-    calib_data.par_t1 = (hold_2bytes[0] << 8) | hold_2bytes[1];
+    // Lookup table for all calibration fields
+    TrimEntry table[] = {
+        { NVM_PAR_T1,  FIELD_U16, &calib_data.par_t1 },
+        { NVM_PAR_T2,  FIELD_U16, &calib_data.par_t2 },
+        { NVM_PAR_T3,  FIELD_U8,  &calib_data.par_t3 },
+        { NVM_PAR_P1,  FIELD_U16, &calib_data.par_p1 },
+        { NVM_PAR_P2,  FIELD_U16, &calib_data.par_p2 },
+        { NVM_PAR_P3,  FIELD_U8,  &calib_data.par_p3 },
+        { NVM_PAR_P4,  FIELD_U8,  &calib_data.par_p4 },
+        { NVM_PAR_P5,  FIELD_U16, &calib_data.par_p5 },
+        { NVM_PAR_P6,  FIELD_U16, &calib_data.par_p6 },
+        { NVM_PAR_P7,  FIELD_U8,  &calib_data.par_p7 },
+        { NVM_PAR_P8,  FIELD_U8,  &calib_data.par_p8 },
+        { NVM_PAR_P9,  FIELD_U16, &calib_data.par_p9 },
+        { NVM_PAR_P10, FIELD_U8,  &calib_data.par_p10 },
+        { NVM_PAR_P11, FIELD_U8,  &calib_data.par_p11 },
+    };
 
-    if ((st = barometer_read_reg(hspi, NVM_PAR_T2, hold_2bytes, 2)) != HAL_OK)
-        return st;
-    calib_data.par_t2 = (hold_2bytes[0] << 8) | hold_2bytes[1];
+    for (size_t i = 0; i < sizeof(table)/sizeof(table[0]); i++) {
+        size_t len = (table[i].type == FIELD_U16) ? 2 : 1;
 
-    if ((st = barometer_read_reg(hspi, NVM_PAR_T3, hold_1byte, 1)) != HAL_OK)
-        return st;
-    calib_data.par_t3 = hold_1byte[0];
+        st = barometer_read_reg(hspi, table[i].reg, buf, len);
+        if (st != HAL_OK)
+            return st;
 
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P1, hold_2bytes, 2)) != HAL_OK)
-        return st;
-    calib_data.par_p1 = (hold_2bytes[0] << 8) | hold_2bytes[1];
+        if (table[i].type == FIELD_U16) {
+            *(uint16_t *)table[i].dest = (buf[0] << 8) | buf[1];
+        } else {
+            *(uint8_t *)table[i].dest = buf[0];
+        }
+    }
 
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P2, hold_2bytes, 2)) != HAL_OK)
-        return st;
-    calib_data.par_p2 = (hold_2bytes[0] << 8) | hold_2bytes[1];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P3, hold_1byte, 1)) != HAL_OK)
-        return st;
-    calib_data.par_p3 = hold_1byte[0];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P4, hold_1byte, 1)) != HAL_OK)
-        return st;
-    calib_data.par_p4 = hold_1byte[0];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P5, hold_2bytes, 2)) != HAL_OK)
-        return st;
-    calib_data.par_p5 = (hold_2bytes[0] << 8) | hold_2bytes[1];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P6, hold_2bytes, 2)) != HAL_OK)
-        return st;
-    calib_data.par_p6 = (hold_2bytes[0] << 8) | hold_2bytes[1];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P7, hold_1byte, 1)) != HAL_OK)
-        return st;
-    calib_data.par_p7 = hold_1byte[0];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P8, hold_1byte, 1)) != HAL_OK)
-        return st;
-    calib_data.par_p8 = hold_1byte[0];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P9, hold_2bytes, 2)) != HAL_OK)
-        return st;
-    calib_data.par_p9 = (hold_2bytes[0] << 8) | hold_2bytes[1];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P10, hold_1byte, 1)) != HAL_OK)
-        return st;
-    calib_data.par_p10 = hold_1byte[0];
-
-    if ((st = barometer_read_reg(hspi, NVM_PAR_P11, hold_1byte, 1)) != HAL_OK)
-        return st;
-    calib_data.par_p11 = hold_1byte[0];
-
-    return st;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)

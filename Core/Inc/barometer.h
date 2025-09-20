@@ -110,6 +110,17 @@ static struct BMP390_calib_data
     float t_lin;
 } calib_data;
 
+typedef enum {
+    FIELD_U8,
+    FIELD_U16
+} FieldType;
+
+typedef struct {
+    uint8_t reg;
+    FieldType type;
+    void *dest;
+} TrimEntry;
+
 float BMP390_compensate_pressure(uint32_t uncomp_press, struct BMP390_calib_data *calib_data);
 float BMP390_compensate_temperature(uint32_t uncomp_temp, struct BMP390_calib_data *calib_data);
 
