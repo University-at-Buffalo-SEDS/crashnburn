@@ -61,9 +61,9 @@ static inline HAL_StatusTypeDef read_trim_pars(SPI_HandleTypeDef *hspi)
         {NVM_PAR_P11, FIELD_U8, &calib_data.par_p11},
     };
 
-    for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); i++)
+    for (uint8_t i = 0; i < sizeof(table) / sizeof(table[0]); i++)
     {
-        size_t len = (table[i].type == FIELD_U16) ? 2 : 1;
+        uint8_t len = (table[i].type == FIELD_U16) ? 2 : 1;
 
         st = barometer_read_reg(hspi, table[i].reg, buf, len);
         if (st != HAL_OK)
