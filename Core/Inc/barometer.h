@@ -129,3 +129,9 @@ float BMP390_compensate_temperature(uint32_t uncomp_temp);
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
 
 HAL_StatusTypeDef barometer_read_pressure(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out_data, uint16_t out_len);
+
+HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *temperature_c, float *pressure_pa);
+
+HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa);
+
+HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c);

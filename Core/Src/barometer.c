@@ -31,6 +31,11 @@ HAL_StatusTypeDef barometer_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8
     return st;
 }
 
+static inline uint32_t u24(const uint8_t b0, const uint8_t b1, const uint8_t b2)
+{
+    return ((uint32_t)b2 << 16) | ((uint32_t)b1 << 8) | (uint32_t)b0;
+}
+
 /* Read calibration data from NVM registers (0x31-45). */
 
 static inline HAL_StatusTypeDef read_trim_pars(SPI_HandleTypeDef *hspi)
@@ -143,4 +148,55 @@ float BMP390_compensate_temperature(uint32_t uncomp_temp)
 
     /* Returns compensated temperature */
     return calib_data.t_lin;
+}
+
+HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c)
+{
+    HAL_StatusTypeDef st;
+
+    uint8_t tbuf[3];
+    st = barometer_read_reg(hspi, DATA_3, tbuf, sizeof(tbuf)); // DATA_3..5 = temp bytes
+    if (st != HAL_OK)
+        return st;
+
+    uint32_t adc_t = u24(tbuf[0], tbuf[1], tbuf[2]);  // 24-bit raw temp
+    float t_c = BMP390_compensate_temperature(adc_t); // updates calib_data.t_lin
+    if (temperature_c)
+        *temperature_c = t_c;
+    return HAL_OK;
+}
+
+HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa)
+{
+    // If you want to require DRDY here too, keep wait_data_ready; otherwise omit.
+    HAL_StatusTypeDef st;
+
+    float temp;
+    st = get_temperature_pressure(hspi, &temp, pressure_pa);
+    return st;
+}
+
+HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *temperature_c, float *pressure_pa)
+{
+    HAL_StatusTypeDef st;
+
+    uint8_t buf[6];
+    st = barometer_read_reg(hspi, DATA_0, buf, sizeof(buf)); // DATA_0..5 in one shot
+    if (st != HAL_OK)
+        return st;
+
+    // Order from your map:
+    // buf[0..2] -> press_7_0, press_15_8, press_23_16
+    // buf[3..5] -> temp_7_0,  temp_15_8,  temp_23_16
+    uint32_t adc_p = u24(buf[0], buf[1], buf[2]);
+    uint32_t adc_t = u24(buf[3], buf[4], buf[5]);
+
+    float t_c = BMP390_compensate_temperature(adc_t); // sets calib_data.t_lin
+    float p_pa = BMP390_compensate_pressure(adc_p);   // uses calib_data.t_lin
+
+    if (temperature_c)
+        *temperature_c = t_c;
+    if (pressure_pa)
+        *pressure_pa = p_pa;
+    return HAL_OK;
 }

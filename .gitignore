@@ -10,3 +10,4 @@ compile_commands.json
 CMakePresets.json
 CMakeFiles
 Makefile
+cmake_install.cmake
