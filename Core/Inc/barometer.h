@@ -7,7 +7,7 @@
 #define ERR_REG 0x02
 #define STATUS 0x03
 
-// Metrics (one 24 bit reading is split across 3 registers) RO
+// Metrics (one 24 bit reading is split across 3 registers)
 
 // Pressure RO
 #define DATA_0 0x04
@@ -19,7 +19,7 @@
 #define DATA_4 0x08
 #define DATA_5 0x09
 
-// Sensor time
+// Sensor time RO
 #define SENSORTIME_0 0x0C
 #define SENSORTIME_1 0x0D
 #define SENSORTIME_2 0x0E
