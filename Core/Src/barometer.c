@@ -96,15 +96,11 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
 
     HAL_StatusTypeDef st;
     st = HAL_SPI_Transmit(hspi, mode_buffer, (uint16_t)sizeof(mode_buffer), BAROMETER_INITIALIZATION_TIMEOUT);
+    BARO_CS_HIGH;
     if (st != HAL_OK)
-    {
-        BARO_CS_HIGH;
         return st;
-    }
 
     st = read_trim_pars(hspi);
-
-    BARO_CS_HIGH;
     return st;
 }
 
