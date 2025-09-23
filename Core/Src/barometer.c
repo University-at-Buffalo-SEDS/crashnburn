@@ -155,12 +155,12 @@ HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c)
     HAL_StatusTypeDef st;
 
     uint8_t tbuf[3];
-    st = barometer_read_reg(hspi, DATA_3, tbuf, sizeof(tbuf)); // DATA_3..5 = temp bytes
+    st = barometer_read_reg(hspi, DATA_3, tbuf, sizeof(tbuf));
     if (st != HAL_OK)
         return st;
 
-    uint32_t adc_t = u24(tbuf[0], tbuf[1], tbuf[2]);  // 24-bit raw temp
-    float t_c = BMP390_compensate_temperature(adc_t); // updates calib_data.t_lin
+    uint32_t adc_t = u24(tbuf[0], tbuf[1], tbuf[2]);
+    float t_c = BMP390_compensate_temperature(adc_t);
     if (temperature_c)
         *temperature_c = t_c;
     return HAL_OK;
@@ -168,7 +168,6 @@ HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c)
 
 HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa)
 {
-    // If you want to require DRDY here too, keep wait_data_ready; otherwise omit.
     HAL_StatusTypeDef st;
 
     float temp;
@@ -181,18 +180,15 @@ HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *tempe
     HAL_StatusTypeDef st;
 
     uint8_t buf[6];
-    st = barometer_read_reg(hspi, DATA_0, buf, sizeof(buf)); // DATA_0..5 in one shot
+    st = barometer_read_reg(hspi, DATA_0, buf, sizeof(buf));
     if (st != HAL_OK)
         return st;
 
-    // Order from your map:
-    // buf[0..2] -> press_7_0, press_15_8, press_23_16
-    // buf[3..5] -> temp_7_0,  temp_15_8,  temp_23_16
     uint32_t adc_p = u24(buf[0], buf[1], buf[2]);
     uint32_t adc_t = u24(buf[3], buf[4], buf[5]);
 
-    float t_c = BMP390_compensate_temperature(adc_t); // sets calib_data.t_lin
-    float p_pa = BMP390_compensate_pressure(adc_p);   // uses calib_data.t_lin
+    float t_c = BMP390_compensate_temperature(adc_t);
+    float p_pa = BMP390_compensate_pressure(adc_p);  
 
     if (temperature_c)
         *temperature_c = t_c;
