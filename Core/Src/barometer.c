@@ -155,12 +155,14 @@ HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c)
     HAL_StatusTypeDef st;
 
     uint8_t tbuf[3];
+    //read temp data
     st = barometer_read_reg(hspi, DATA_3, tbuf, sizeof(tbuf));
     if (st != HAL_OK)
         return st;
-
+    //convert the values into a 24 bit number in a 32 bit container.
     uint32_t adc_t = u24(tbuf[0], tbuf[1], tbuf[2]);
     float t_c = BMP390_compensate_temperature(adc_t);
+    //if the pointer is not null set their values.
     if (temperature_c)
         *temperature_c = t_c;
     return HAL_OK;
@@ -171,6 +173,7 @@ HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa)
     HAL_StatusTypeDef st;
 
     float temp;
+    //getting the pressure also relies on temperature, thus we will call get_temperature_pressure to ensure both are up to date.
     st = get_temperature_pressure(hspi, &temp, pressure_pa);
     return st;
 }
@@ -180,16 +183,18 @@ HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *tempe
     HAL_StatusTypeDef st;
 
     uint8_t buf[6];
+    //read both temp and pressure data at once
     st = barometer_read_reg(hspi, DATA_0, buf, sizeof(buf));
     if (st != HAL_OK)
         return st;
-
+    //convert the values into a 24 bit number in a 32 bit container.
     uint32_t adc_p = u24(buf[0], buf[1], buf[2]);
     uint32_t adc_t = u24(buf[3], buf[4], buf[5]);
-
+    //compensate the raw values with the calibration data stored on the chip;
     float t_c = BMP390_compensate_temperature(adc_t);
     float p_pa = BMP390_compensate_pressure(adc_p);  
 
+    //if the pointers are not null set their values.
     if (temperature_c)
         *temperature_c = t_c;
     if (pressure_pa)
