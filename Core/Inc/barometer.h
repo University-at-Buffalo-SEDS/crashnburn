@@ -126,6 +126,8 @@ typedef struct
 float BMP390_compensate_pressure(uint32_t uncomp_press);
 float BMP390_compensate_temperature(uint32_t uncomp_temp);
 
+static inline uint32_t u24(const uint8_t b0, const uint8_t b1, const uint8_t b2);
+
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
 
 HAL_StatusTypeDef barometer_read_pressure(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out_data, uint16_t out_len);
