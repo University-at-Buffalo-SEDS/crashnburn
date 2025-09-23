@@ -162,7 +162,7 @@ HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c)
     //convert the values into a 24 bit number in a 32 bit container.
     uint32_t adc_t = u24(tbuf[0], tbuf[1], tbuf[2]);
     float t_c = BMP390_compensate_temperature(adc_t);
-    //if the pointer is not null set their values.
+    //if the pointer is not null set its values.
     if (temperature_c)
         *temperature_c = t_c;
     return HAL_OK;
