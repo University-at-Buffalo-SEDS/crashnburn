@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
@@ -26,36 +26,46 @@ jobs:
         run: |
           # Move/ensure the installer is at repo root (adjust if it's already there)
           if [ -f "CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh" ]; then
-            mv tools/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh .
+            mv CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh .
           fi
           ls -l st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
 
       - name: Install STM32CubeCLT (cube-cmake)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y dpkg
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y dpkg expect
           chmod +x st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
-          # Pass dpkg options after `--`. -y = assume yes/noninteractive
-          sudo ./st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh -- -y
+          expect <<'EOF'
+          set timeout -1
+          set ::env(LC_ALL) "C"          ;# keep English prompt if locale varies
+          spawn ./st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh --nox11 -- -y
+          expect {
+            -re {I ACCEPT.*\[N\/y\]}   { send -- "y\r"; exp_continue }
+            -re {Please type y to accept.*} { send -- "y\r"; exp_continue }
+            -re {Press (Enter|RETURN) to continue} { send -- "\r"; exp_continue }
+            eof
+          }
+          EOF
 
-          # Add CubeCLT toolchain and tools to PATH (version-agnostic glob)
-          echo "/opt/st/stm32cubeclt_*/gnu/gcc-arm-none-eabi/bin" >> $GITHUB_PATH
-          echo "/opt/st/stm32cubeclt_*/tools/bin"                 >> $GITHUB_PATH
+          for d in /opt/st/stm32cubeclt_1.19.0/*/bin; do
+          export PATH="$d:$PATH"
+          done
+
 
       - name: Verify toolchain
         run: |
-          which cube-cmake
-          cube-cmake --version
+          which cmake
+          cmake --version
           which arm-none-eabi-gcc
           arm-none-eabi-gcc --version
 
       - name: Configure (cube-cmake)
         run: |
-          cube-cmake -S . -B "${BUILD_DIR}" -G Ninja \
-            -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+          cmake -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake -DCMAKE_COMMAND=cmake -S $(pwd) -B "$BUILD_DIR" -G Ninja
 
       - name: Build (cube-cmake)
-        run: cube-cmake --build "${BUILD_DIR}" --parallel
+        run: cmake --build "$BUILD_DIR" --
 
       - name: Package firmware (ELF → BIN/HEX/LST/SIZE)
         run: |
