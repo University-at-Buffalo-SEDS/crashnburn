@@ -139,6 +139,8 @@ HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa);
 
 HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c);
 
-float compute_relative_altitude(float pressure);
 
+//the value is in meters
+float compute_relative_altitude(float pressure);
+//the value is in meters
 float get_relative_altitude(SPI_HandleTypeDef *hspi);
