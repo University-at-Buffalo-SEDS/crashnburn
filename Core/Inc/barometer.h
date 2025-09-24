@@ -1,5 +1,6 @@
 #pragma once
 #include "stm32g4xx_hal.h"
+#include <math.h>
 
 // General RO
 #define CHIP_ID 0x00
@@ -91,6 +92,8 @@
 #define BARO_CS_LOW HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_RESET)
 #define BARO_CS_HIGH HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_SET)
 
+#define SEA_LEVEL_PRESSURE 101325.0f
+
 static struct BMP390_calib_data
 {
     uint16_t par_t1;
@@ -125,15 +128,17 @@ typedef struct
 
 float BMP390_compensate_pressure(uint32_t uncomp_press);
 float BMP390_compensate_temperature(uint32_t uncomp_temp);
-
+static float ground_level_pressure = 0.0f;
 static inline uint32_t u24(const uint8_t b0, const uint8_t b1, const uint8_t b2);
 
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
-
-HAL_StatusTypeDef barometer_read_pressure(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out_data, uint16_t out_len);
 
 HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *temperature_c, float *pressure_pa);
 
 HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa);
 
 HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c);
+
+float compute_relative_altitude(float pressure);
+
+float get_relative_altitude(SPI_HandleTypeDef *hspi);

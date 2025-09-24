@@ -101,6 +101,9 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
         return st;
 
     st = read_trim_pars(hspi);
+
+
+    get_pressure(hspi, &ground_level_pressure);
     return st;
 }
 
@@ -196,4 +199,18 @@ HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *tempe
     if (pressure_pa)
         *pressure_pa = p_pa;
     return HAL_OK;
+}
+
+float relative_altitude(float pressure) {
+    if (ground_level_pressure <= 0.0f) return 0.0f;
+    return 44330.0f * (1.0f - powf(pressure / ground_level_pressure, 0.1903f));
+}
+
+float get_relative_altitude(SPI_HandleTypeDef *hspi){
+    float pressure;
+    HAL_StatusTypeDef st = get_pressure(hspi, &pressure);
+    if (st!= HAL_OK){
+        return -1;
+    }
+    return compute_relative_altitude(pressure);
 }
