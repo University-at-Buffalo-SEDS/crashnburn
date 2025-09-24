@@ -1,0 +1,98 @@
+name: Build and Release STM32 (cube-cmake)
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'     # tag like v1.2.3 to trigger a Release
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      BUILD_TYPE: ${{ startsWith(github.ref, 'refs/tags/v') && 'Release' || 'Debug' }}
+      BUILD_DIR: ${{ startsWith(github.ref, 'refs/tags/v') && 'build/release' || 'build/debug' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # If your bundle is in a subfolder, adjust the path below
+      - name: Get STM32CubeCLT installer
+        run: |
+          # Move/ensure the installer is at repo root (adjust if it's already there)
+          if [ -f "CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh" ]; then
+            mv tools/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh .
+          fi
+          ls -l st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
+
+      - name: Install STM32CubeCLT (cube-cmake)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg
+          chmod +x st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
+          # Pass dpkg options after `--`. -y = assume yes/noninteractive
+          sudo ./st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh -- -y
+
+          # Add CubeCLT toolchain and tools to PATH (version-agnostic glob)
+          echo "/opt/st/stm32cubeclt_*/gnu/gcc-arm-none-eabi/bin" >> $GITHUB_PATH
+          echo "/opt/st/stm32cubeclt_*/tools/bin"                 >> $GITHUB_PATH
+
+      - name: Verify toolchain
+        run: |
+          which cube-cmake
+          cube-cmake --version
+          which arm-none-eabi-gcc
+          arm-none-eabi-gcc --version
+
+      - name: Configure (cube-cmake)
+        run: |
+          cube-cmake -S . -B "${BUILD_DIR}" -G Ninja \
+            -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+
+      - name: Build (cube-cmake)
+        run: cube-cmake --build "${BUILD_DIR}" --parallel
+
+      - name: Package firmware (ELF → BIN/HEX/LST/SIZE)
+        run: |
+          mkdir -p "${BUILD_DIR}/out"
+          mapfile -t ELFS < <(find "${BUILD_DIR}" -type f -name '*.elf')
+          if [ ${#ELFS[@]} -eq 0 ]; then
+            echo "No .elf files found in ${BUILD_DIR}"; exit 1
+          fi
+          for ELF in "${ELFS[@]}"; do
+            base="$(basename "${ELF%.elf}")"
+            arm-none-eabi-objcopy -O binary "${ELF}" "${BUILD_DIR}/out/${base}.bin"
+            arm-none-eabi-objcopy -O ihex   "${ELF}" "${BUILD_DIR}/out/${base}.hex"
+            arm-none-eabi-objdump -h -S "${ELF}" > "${BUILD_DIR}/out/${base}.lst" || true
+            arm-none-eabi-size --format=berkeley "${ELF}" > "${BUILD_DIR}/out/${base}.size" || true
+            cp "${ELF}" "${BUILD_DIR}/out/${base}.elf"
+          done
+          ls -lah "${BUILD_DIR}/out"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ env.BUILD_TYPE }}
+          path: ${{ env.BUILD_DIR }}/out/*
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Firmware ${{ github.ref_name }}
+          files: |
+            ${{ env.BUILD_DIR }}/out/*.bin
+            ${{ env.BUILD_DIR }}/out/*.hex
+            ${{ env.BUILD_DIR }}/out/*.elf
+            ${{ env.BUILD_DIR }}/out/*.lst
+            ${{ env.BUILD_DIR }}/out/*.size
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
