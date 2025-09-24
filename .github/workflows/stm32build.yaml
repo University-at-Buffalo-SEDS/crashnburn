@@ -22,7 +22,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # If your bundle is in a subfolder, adjust the path below
       - name: Get STM32CubeCLT installer
         run: |
           # Move/ensure the installer is at repo root (adjust if it's already there)
