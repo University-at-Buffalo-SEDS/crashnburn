@@ -38,22 +38,100 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           chmod +x st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
+
+          # --- Anti-paging & deterministic TTY env for the installer ---
+          # Many TUI installers page the license via $PAGER; force "cat" to avoid it.
+          export LC_ALL=C
+          export PAGER=cat
+          export LESS='-F -X -R'
+          export MORE='-f'
+          export TERM=xterm
+          # Big terminal so no pagination heuristics trigger
+          stty rows 200 columns 200 || true
+      
+          # Run the interactive script with expect
           expect <<'EOF'
-          set timeout -1
-          set ::env(LC_ALL) "C"          ;# keep English prompt if locale varies
-          spawn sudo ./st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh --nox11 -- -y
+          # Uncomment next line to debug matching:
+          # exp_internal 1
+      
+          # Be generous but finite; CI can be slow
+          set timeout 600
+      
+          # Always keep English prompts
+          set ::env(LC_ALL) "C"
+          set ::env(PAGER)  "cat"
+          set ::env(LESS)   "-F -X -R"
+          set ::env(MORE)   "-f"
+          set ::env(TERM)   "xterm"
+      
+          # Start installer as root; --nox11 avoids GUI; trailing -- -y passes default "yes" to any dpkg prompts
+          spawn sudo -E ./st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh --nox11 -- -y
+      
+          # Some installers still try to page; proactively send a few spaces/enters when we see long license blocks
+          proc press_space {} {
+            after 100
+            send -- " "
+          }
+          proc press_enter {} {
+            after 100
+            send -- "\r"
+          }
+      
+          # Main loop: advance through license/pager screens until we hit an explicit accept prompt,
+          # then send 'y' and keep going until eof.
           expect {
-            -re {I ACCEPT.*\[N\/y\]}   { send -- "y\r"; exp_continue }
-            -re {Please type y to accept.*} { send -- "y\r"; exp_continue }
-            -re {Press (Enter|RETURN) to continue} { send -- "\r"; exp_continue }
+            # Typical paging markers
+            -re {--More--|Press (ENTER|Enter|Return) to continue|Press any key to continue} {
+              press_space
+              exp_continue
+            }
+      
+            # "I ACCEPT [N/y]" style prompt
+            -re {I ACCEPT.*\[N\/y\]} {
+              send -- "y\r"
+              exp_continue
+            }
+      
+            # Another common wording
+            -re {Please type y to accept.*} {
+              send -- "y\r"
+              exp_continue
+            }
+      
+            # Some variants show (y/N) or (Y/n)
+            -re {\((?:y/N|Y/n)\)} {
+              send -- "y\r"
+              exp_continue
+            }
+      
+            # Sometimes a plain "Do you accept" without brackets
+            -re {Do you accept.*\?} {
+              send -- "y\r"
+              exp_continue
+            }
+      
+            # Generic "Press Enter to continue"
+            -re {Press (Enter|RETURN) to continue} {
+              press_enter
+              exp_continue
+            }
+      
+            # After license acceptance, installers often ask to proceed
+            -re {Continue\? \[Y/n\]} {
+              send -- "y\r"
+              exp_continue
+            }
+      
+            # Installer finished
             eof
           }
           EOF
-
+      
+          # Put CubeCLT tool binaries on PATH for later steps
           for d in /opt/st/stm32cubeclt_1.19.0/*/bin; do
-          export PATH="$d:$PATH"
+            echo "$d" >> "$GITHUB_PATH"
           done
-
+      
 
       - name: Verify toolchain
         run: |
