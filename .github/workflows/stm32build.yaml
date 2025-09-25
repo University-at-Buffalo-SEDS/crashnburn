@@ -22,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get STM32CubeCLT installer
+      - name: Setup the environment (install dependencies and grab the STM32CUBECLT installer)
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg expect git-lfs
@@ -34,7 +34,7 @@ jobs:
           fi
           ls -l st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
 
-      - name: Install STM32CubeCLT (cube-cmake)
+      - name: Install STM32CubeCLT (The embedded toolchain for the stm32 microcontroller)
         run: |
           export DEBIAN_FRONTEND=noninteractive
           chmod +x st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
@@ -140,11 +140,11 @@ jobs:
           which arm-none-eabi-gcc
           arm-none-eabi-gcc --version
 
-      - name: Configure (cube-cmake)
+      - name: Configure (Setup the build environment)
         run: |
           cmake -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake -DCMAKE_COMMAND=cmake -S $(pwd) -B "$BUILD_DIR" -G Ninja
 
-      - name: Build (cube-cmake)
+      - name: Build (Build the project)
         run: cmake --build "$BUILD_DIR" --
 
       - name: Package firmware (ELF → BIN/HEX/LST/SIZE)
