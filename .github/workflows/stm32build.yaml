@@ -33,13 +33,13 @@ jobs:
       - name: Install STM32CubeCLT (cube-cmake)
         run: |
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y dpkg expect
+          sudo apt-get update
+          sudo apt-get install -y dpkg expect
           chmod +x st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
           expect <<'EOF'
           set timeout -1
           set ::env(LC_ALL) "C"          ;# keep English prompt if locale varies
-          spawn ./st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh --nox11 -- -y
+          spawn sudo ./st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh --nox11 -- -y
           expect {
             -re {I ACCEPT.*\[N\/y\]}   { send -- "y\r"; exp_continue }
             -re {Please type y to accept.*} { send -- "y\r"; exp_continue }
