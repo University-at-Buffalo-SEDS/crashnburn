@@ -17,8 +17,37 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#ifndef __MAIN_H
+  #define __MAIN_H
+  #endif
+#include "gyro.h"
+#include "stm32g4xx_hal_conf.h"  
+#include "stm32g4xx_it.h"
 #include "main.h"
+#include "stm32g4xx_hal_spi.h"
 #include "usb_device.h"
+
+// Define the LED GPIO port and pin if not defined elsewhere
+#ifndef led_GPIO_Port
+#define led_GPIO_Port GPIOB
+#endif
+
+#ifndef led_Pin
+#define led_Pin GPIO_PIN_0
+#endif
+
+// Define chip select pins for accel, gyro, and baro if not defined elsewhere
+#ifndef accel_CS_Pin
+#define accel_CS_Pin GPIO_PIN_1
+#endif
+
+#ifndef gyro_CS_Pin
+#define gyro_CS_Pin GPIO_PIN_2
+#endif
+
+#ifndef baro_CS_Pin
+#define baro_CS_Pin GPIO_PIN_3
+#endif
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -51,6 +80,7 @@ SPI_HandleTypeDef hspi1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
+void Error_Handler(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -100,7 +130,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+    HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
+    HAL_Delay(100);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
