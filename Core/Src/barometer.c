@@ -1,7 +1,6 @@
 #include "barometer.h"
 #include "stm32g4xx_hal_def.h"
 #include <stdint.h>
-#include<stdio.h>
 
 HAL_StatusTypeDef barometer_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out_data, uint16_t out_len)
 {
