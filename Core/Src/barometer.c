@@ -201,11 +201,15 @@ HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *tempe
     return HAL_OK;
 }
 
+
+// Ground level pressure in Pa
 float compute_relative_altitude(float pressure) {
     if (ground_level_pressure <= 0.0f) return 0.0f;
     return 44330.0f * (1.0f - powf(pressure / ground_level_pressure, 0.1903f));
 }
 
+
+//get relative altitude in meters
 float get_relative_altitude(SPI_HandleTypeDef *hspi){
     float pressure;
     HAL_StatusTypeDef st = get_pressure(hspi, &pressure);
