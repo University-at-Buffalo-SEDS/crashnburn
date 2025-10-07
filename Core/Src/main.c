@@ -30,7 +30,7 @@ static int tx_send(const uint8_t *bytes, size_t len, void *user)
 {
     (void)user;  // unused
     printf("[tx] sent %zu bytes\n", len);
-    return 0;
+    return SEDS_OK;
 }
 
 // ---- Simple radio handler (no context needed) ----
@@ -39,7 +39,7 @@ static int on_radio_packet(const SedsPacketView *pkt, void *user)
     (void)user;  // unused
     printf("[radio] ty=%" PRIu32 ", size=%zu, ts=%" PRIu64 "\n",
            pkt->ty, pkt->data_size, (unsigned long long)pkt->timestamp);
-    return 0;
+    return SEDS_OK;
 }
 
 
