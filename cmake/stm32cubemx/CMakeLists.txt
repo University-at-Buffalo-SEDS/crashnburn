@@ -71,27 +71,11 @@ set(USB_Device_Library_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c
 )
 
-# Link directories setup
-set(MX_LINK_DIRS
-
-)
-
-set(SEDSPRINTF_C_HEADERS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sedsprintf_rs/C-Headers)
-
-# Prebuilt Rust static lib (host/macOS build shown)
-set(SEDSPRINTF_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../../sedsprintf_rs/target/thumbv7em-none-eabihf/release/libsedsprintf_rs.a)
-
-add_library(sedsprintf_rs STATIC IMPORTED GLOBAL)
-set_target_properties(sedsprintf_rs PROPERTIES
-        IMPORTED_LOCATION "${SEDSPRINTF_LIB}"
-        INTERFACE_INCLUDE_DIRECTORIES "${SEDSPRINTF_C_HEADERS_DIR}"
-)
 # Project static libraries
 set(MX_LINK_LIBS 
     STM32_Drivers
     ${TOOLCHAIN_LINK_LIBRARIES}
     USB_Device_Library
-    sedsprintf_rs
 	
 )
 # Interface library for includes and symbols
