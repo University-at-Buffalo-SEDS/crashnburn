@@ -11,3 +11,5 @@ CMakePresets.json
 CMakeFiles
 Makefile
 cmake_install.cmake
+
+.idea/

@@ -19,6 +19,7 @@ set(MX_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Device/ST/STM32G4xx/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Include
+    ${SEDSPRINTF_C_HEADERS_DIR}
 )
 
 # STM32CubeMX generated application sources
@@ -28,6 +29,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../USB_Device/App/usbd_desc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../USB_Device/App/usbd_cdc_if.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos_alloc_shim.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/barometer.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32g4xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32g4xx_hal_msp.c
@@ -73,11 +75,23 @@ set(USB_Device_Library_Src
 set(MX_LINK_DIRS
 
 )
+
+set(SEDSPRINTF_C_HEADERS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sedsprintf_rs/C-Headers)
+
+# Prebuilt Rust static lib (host/macOS build shown)
+set(SEDSPRINTF_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../../sedsprintf_rs/target/thumbv7em-none-eabihf/release/libsedsprintf_rs.a)
+
+add_library(sedsprintf_rs STATIC IMPORTED GLOBAL)
+set_target_properties(sedsprintf_rs PROPERTIES
+        IMPORTED_LOCATION "${SEDSPRINTF_LIB}"
+        INTERFACE_INCLUDE_DIRECTORIES "${SEDSPRINTF_C_HEADERS_DIR}"
+)
 # Project static libraries
 set(MX_LINK_LIBS 
     STM32_Drivers
     ${TOOLCHAIN_LINK_LIBRARIES}
     USB_Device_Library
+    sedsprintf_rs
 	
 )
 # Interface library for includes and symbols
