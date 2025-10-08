@@ -126,7 +126,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 // setup the local endpoints
-SedsHandlerDesc handlers[] = {
+SedsLocalEndpointDesc local_endpoint_handlers[] = {
         {
             .endpoint = SEDS_EP_RADIO,
             .handler  = on_radio_packet,
@@ -138,7 +138,7 @@ SedsHandlerDesc handlers[] = {
     SedsRouter *r = seds_router_new(
         tx_send,
         NULL,  // tx_user
-        handlers,
+        local_endpoint_handlers,
         1
     );
     if (!r) {
