@@ -145,7 +145,7 @@ SedsHandlerDesc handlers[] = {
 
     float vals[3] = {1.0f, 2.0f, 3.0f};
     uint64_t ts = (uint64_t)HAL_GetTick();
-    seds_router_log_f32(r, SEDS_DT_GPS, vals, 3, ts);
+    seds_router_log(r, SEDS_DT_GPS, vals, 3, ts);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
