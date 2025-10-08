@@ -1,3 +1,3 @@
 [submodule "sedsprintf_rs"]
 	path = sedsprintf_rs
-	url = git@github.com:Rylan-Meilutis/sedsprintf_rs.git
+	url = https://github.com/Rylan-Meilutis/sedsprintf_rs.git
