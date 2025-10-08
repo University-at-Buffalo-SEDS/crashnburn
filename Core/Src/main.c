@@ -26,7 +26,7 @@
 #include <inttypes.h>
 #include <time.h>
 
-static int tx_send(const uint8_t *bytes, size_t len, void *user)
+static SedsResult tx_send(const uint8_t *bytes, size_t len, void *user)
 {
     (void)user;  // unused
     printf("[tx] sent %zu bytes\n", len);
@@ -34,12 +34,12 @@ static int tx_send(const uint8_t *bytes, size_t len, void *user)
 }
 
 // ---- Simple radio handler (no context needed) ----
-static int on_radio_packet(const SedsPacketView *pkt, void *user)
+static SedsResult on_radio_packet(const SedsPacketView *pkt, void *user)
 {
     (void)user;  // unused
 
     char data[seds_pkt_to_string_len(pkt)];
-    SedsError status = seds_pkt_to_string(pkt, data, sizeof(data));
+    SedsResult status = seds_pkt_to_string(pkt, data, sizeof(data));
     if (status != SEDS_OK)
     {
         printf("radio_packet_handler: seds_pkt_to_string failed: %d\n", status);
