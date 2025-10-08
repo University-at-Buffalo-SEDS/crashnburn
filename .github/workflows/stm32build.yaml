@@ -27,6 +27,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y dpkg expect git-lfs
           sudo apt-get remove -y cmake
+          rustup target add thumbv7m-none-eabi
           git-lfs pull
           # Move/ensure the installer is at repo root (adjust if it's already there)
           if [ -f "CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh" ]; then
