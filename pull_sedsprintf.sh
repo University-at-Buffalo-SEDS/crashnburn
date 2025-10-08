@@ -1,1 +1,3 @@
-git subtree pull --prefix=sedsprintf_rs sedsprintf-upstream main  --squash -m "Update from the upstream Library"
+git -c commit.gpgsign=true subtree pull --prefix=sedsprintf_rs \
+  sedsprintf-upstream main --squash \
+  -m "Squashed update of sedsprintf_rs"
