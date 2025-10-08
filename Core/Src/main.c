@@ -37,8 +37,17 @@ static int tx_send(const uint8_t *bytes, size_t len, void *user)
 static int on_radio_packet(const SedsPacketView *pkt, void *user)
 {
     (void)user;  // unused
-    printf("[radio] ty=%" PRIu32 ", size=%zu, ts=%" PRIu64 "\n",
-           pkt->ty, pkt->data_size, (unsigned long long)pkt->timestamp);
+
+    char data[seds_pkt_to_string_len(pkt)];
+    SedsError status = seds_pkt_to_string(pkt, data, sizeof(data));
+    if (status != SEDS_OK)
+    {
+        printf("radio_packet_handler: seds_pkt_to_string failed: %d\n", status);
+        return status;
+    }
+    //change this to log to the correct device (radio or sd_card)
+    printf("on_radio_packet: received packet: %s\n", data);
+
     return SEDS_OK;
 }
 
