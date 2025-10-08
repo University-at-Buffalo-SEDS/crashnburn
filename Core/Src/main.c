@@ -25,6 +25,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
+#include "barometer.h"
 
 static SedsResult tx_send(const uint8_t *bytes, size_t len, void *user)
 {
@@ -145,16 +146,22 @@ SedsLocalEndpointDesc local_endpoint_handlers[] = {
         fprintf(stderr, "failed to create router\n");
         return 1;
     }
+
+
+
+
+  init_barometer(&hspi1); 
+  float barometer_pressure[1] = {1.0f};
+
   /* USER CODE END 2 */
-  
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-    float vals[3] = {1.0f, 2.0f, 3.0f};
+    get_pressure(&hspi1, barometer_pressure);
     uint64_t ts = (uint64_t)HAL_GetTick();
-    seds_router_log(r, SEDS_DT_GPS, vals, 3, ts);
+    seds_router_log(r, SEDS_DT_BAROMETER, barometer_pressure, 1, ts);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
