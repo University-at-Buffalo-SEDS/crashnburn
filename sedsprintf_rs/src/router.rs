@@ -5,13 +5,13 @@ use crate::{
 };
 
 use crate::config::DEVICE_IDENTIFIER;
-use alloc::format;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 
 // -------------------- endpoint + board config --------------------
 /// The maximum number of retries for handlers before giving up.
 const MAX_NUMBER_OF_RETRYS: usize = 3;
+
 /// A local handler bound to a specific endpoint.
 pub struct EndpointHandler {
     pub endpoint: DataEndpoint,
@@ -110,47 +110,59 @@ impl Router {
         dest: Option<DataEndpoint>,
         e: TelemetryError,
     ) -> Result<()> {
-        let error_endpoints: Vec<DataEndpoint> = match dest {
-            Some(dest) => {
-                // If we know which endpoint failed, we create an error packet for all other endpoints.
-                pkt.endpoints
-                    .iter()
-                    .copied()
-                    .filter(|&ep| ep != dest)
-                    .collect()
-            }
-            None => {
-                // If we don't know which endpoint failed (e.g., transmission failure), we notify all local endpoints.
-                pkt.endpoints.iter().copied().collect()
-            }
+        // Only notify LOCAL endpoints; if a local handler failed, exclude that one.
+        let error_endpoints: Vec<DataEndpoint> = pkt
+            .endpoints
+            .iter()
+            .copied()
+            .filter(|&ep| self.cfg.is_local_endpoint(ep)) // <- keep locals only
+            .filter(|&ep| dest.map(|failed| ep != failed).unwrap_or(true)) // <- exclude failing local
+            .collect();
+
+        // If nothing local to notify, bail (prevents TX recursion).
+        if error_endpoints.is_empty() {
+            return Ok(());
+        }
+
+        // Human-readable message
+        let error_msg = match dest {
+            Some(failed_local) => alloc::format!(
+                "Handler for endpoint {:?} failed on device {:?}: {:?}",
+                failed_local,
+                DEVICE_IDENTIFIER,
+                e
+            ),
+            None => alloc::format!(
+                "TX Handler failed on device {:?}: {:?}",
+                DEVICE_IDENTIFIER,
+                e
+            ),
         };
 
-        let error_payload = match dest {
-            Some(dest) => format!(
-                "Handler for endpoint {:?} failed on device {:?}: {:?}",
-                dest, DEVICE_IDENTIFIER, e
-            ),
-            None => format!(
-                "TX Handler failed on device {:?}: {:?}",
-                DEVICE_IDENTIFIER, e
-            ),
-        };
+        // Build fixed-size, zero-padded payload (pad/truncate to schema size)
+        let meta = message_meta(DataType::TelemetryError);
+        let mut buf = alloc::vec![0u8; meta.data_size]; // zero-initialized
+        let msg_bytes = error_msg.as_bytes();
+        let n = core::cmp::min(buf.len(), msg_bytes.len());
+        if n > 0 {
+            buf[..n].copy_from_slice(&msg_bytes[..n]); // <- actually copy the message
+        }
 
         let error_pkt = TelemetryPacket::new(
             DataType::TelemetryError,
             &error_endpoints,
             pkt.timestamp,
-            Arc::<[u8]>::from(error_payload.into_bytes()),
+            alloc::sync::Arc::<[u8]>::from(buf),
         )?;
-        // send the error packet
+
         self.send(&error_pkt)
     }
 
     /// Log (send) a packet: serialize once, transmit (if any remote endpoint), then deliver to matching locals.
-    fn send(&self, pkt: &TelemetryPacket) -> Result<()> {
+    pub fn send(&self, pkt: &TelemetryPacket) -> Result<()> {
         pkt.validate()?;
 
-        let any_remote = pkt
+        let send_remote = pkt
             .endpoints
             .iter()
             .any(|e| !self.cfg.is_local_endpoint(*e));
@@ -158,7 +170,7 @@ impl Router {
         // Serialize exactly once.
         let bytes = serialize::serialize_packet(pkt);
 
-        if any_remote {
+        if send_remote {
             if let Some(tx) = &self.transmit {
                 for i in 0..MAX_NUMBER_OF_RETRYS {
                     match tx(&bytes) {
@@ -167,6 +179,7 @@ impl Router {
                             if i == MAX_NUMBER_OF_RETRYS - 1 {
                                 // create a packet to all endpoints except the one that failed
                                 self.handle_callback_error(pkt, None, e)?;
+                                return Err(TelemetryError::HandlerError("TX failed"));
                             }
                         }
                     }
@@ -185,6 +198,9 @@ impl Router {
                                 if i == MAX_NUMBER_OF_RETRYS - 1 {
                                     // create a packet to all endpoints except the one that failed
                                     self.handle_callback_error(pkt, Some(dest), e)?;
+                                    return Err(TelemetryError::HandlerError(
+                                        "local handler failed",
+                                    ));
                                 }
                             }
                         }
