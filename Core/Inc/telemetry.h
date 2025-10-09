@@ -21,7 +21,7 @@ SedsResult tx_send(const uint8_t *bytes, size_t len, void *user);
 SedsResult on_radio_packet(const SedsPacketView *pkt, void *user);
 
 // Initialize router once; safe to call multiple times.
-SedsResult init_router(void);
+SedsResult init_telemetry_router(void);
 
 // Log a telemetry sample (1+ floats) with the given SedsDataType.
 SedsResult log_telemetry(SedsDataType data_type, const float *data, size_t data_len);

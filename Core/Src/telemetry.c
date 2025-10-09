@@ -32,7 +32,7 @@ SedsResult on_radio_packet(const SedsPacketView *pkt, void *user)
     return SEDS_OK;
 }
 
-SedsResult init_router(void)
+SedsResult init_telemetry_router(void)
 {
     if (g_router.created && g_router.r) {
         return SEDS_OK;
@@ -66,7 +66,7 @@ SedsResult log_telemetry(SedsDataType data_type, const float *data, size_t data_
 {
     if (!g_router.r) {
         // lazy init if not yet created
-        if (init_router() != SEDS_OK) return SEDS_ERR;
+        if (init_telemetry_router() != SEDS_OK) return SEDS_ERR;
     }
     if (!data || data_len == 0) return SEDS_ERR;
 
