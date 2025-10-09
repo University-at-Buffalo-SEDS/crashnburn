@@ -19,39 +19,13 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_device.h"
-#include "sedsprintf.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
 #include "barometer.h"
-
-static SedsResult tx_send(const uint8_t *bytes, size_t len, void *user)
-{
-    (void)user;  // unused
-    printf("[tx] sent %zu bytes\n", len);
-    return SEDS_OK;
-}
-
-// ---- Simple radio handler (no context needed) ----
-static SedsResult on_radio_packet(const SedsPacketView *pkt, void *user)
-{
-    (void)user;  // unused
-
-    char data[seds_pkt_to_string_len(pkt)];
-    SedsResult status = seds_pkt_to_string(pkt, data, sizeof(data));
-    if (status != SEDS_OK)
-    {
-        printf("radio_packet_handler: seds_pkt_to_string failed: %d\n", status);
-        return status;
-    }
-    //change this to log to the correct device (radio or sd_card)
-    printf("on_radio_packet: received packet: %s\n", data);
-
-    return SEDS_OK;
-}
-
+#include "telemetry.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -126,31 +100,10 @@ int main(void)
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
 
-// setup the local endpoints
-SedsLocalEndpointDesc local_endpoint_handlers[] = {
-        {
-            .endpoint = SEDS_EP_RADIO,
-            .handler  = on_radio_packet,
-            .user     = NULL   // no user context
-        }
-    };
+  // setup the local endpoints
 
-
-    SedsRouter *r = seds_router_new(
-        tx_send,
-        NULL,  // tx_user
-        local_endpoint_handlers,
-        1
-    );
-    if (!r) {
-        fprintf(stderr, "failed to create router\n");
-        return 1;
-    }
-
-
-
-
-  init_barometer(&hspi1); 
+  init_router();
+  init_barometer(&hspi1);
   float barometer_pressure[1] = {1.0f};
 
   /* USER CODE END 2 */
@@ -160,8 +113,7 @@ SedsLocalEndpointDesc local_endpoint_handlers[] = {
   while (1)
   {
     get_pressure(&hspi1, barometer_pressure);
-    uint64_t ts = (uint64_t)HAL_GetTick();
-    seds_router_log(r, SEDS_DT_BAROMETER, barometer_pressure, 1, ts);
+    log_telemetry(SEDS_DT_BAROMETER, barometer_pressure, 1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
