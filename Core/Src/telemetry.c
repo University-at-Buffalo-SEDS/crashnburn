@@ -18,6 +18,17 @@ SedsResult tx_send(const uint8_t *bytes, size_t len, void *user)
     return SEDS_OK;
 }
 
+//example function that recieves the data from the can bus or similar and passes the serialized packet to the router for decoding and handling.
+void rx(const uint8_t *bytes, size_t len)
+{
+    if (!g_router.r) {
+        // lazy init if not yet created
+        if (init_telemetry_router() != SEDS_OK) return;
+    }
+    if (!bytes || len == 0) return;
+    seds_router_receive(g_router.r, bytes, len);
+}
+
 // --- Simple radio handler ---
 SedsResult on_radio_packet(const SedsPacketView *pkt, void *user)
 {

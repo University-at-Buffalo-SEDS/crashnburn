@@ -34,7 +34,6 @@ enable_language(C ASM)
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf_rs)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
@@ -61,6 +60,9 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Remove wrong libob.a library dependency when using cpp files
 list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
+
+#set(SEDSPRINTF_STM_BUILD ON)
+add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf_rs)
 target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf_rs)
 
 # Add linked libraries
