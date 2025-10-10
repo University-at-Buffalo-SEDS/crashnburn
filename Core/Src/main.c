@@ -104,7 +104,7 @@ int main(void)
 
   init_telemetry_router();
   init_barometer(&hspi1);
-  float barometer_pressure[1] = {1.0f};
+  float barometer_pressure[3] = {1.0f, 0, 0};
 
   /* USER CODE END 2 */
 
@@ -112,8 +112,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    get_pressure(&hspi1, barometer_pressure);
-    log_telemetry(SEDS_DT_BAROMETER, barometer_pressure, 1);
+    get_pressure(&hspi1, &barometer_pressure[0]);
+    log_telemetry(SEDS_DT_BAROMETER, barometer_pressure, 3);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
