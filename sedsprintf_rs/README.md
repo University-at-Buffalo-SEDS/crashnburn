@@ -11,6 +11,7 @@ into strings for logging.
   get it from https://rustup.rs/
 - Cmake
 - A C++ compiler
+- A C compiler
     - The thumbv7m-none-eabi target for Rust (if you want to build for ARM Cortex-M)
       Get it with:
   ```bash
@@ -31,7 +32,7 @@ into strings for logging.
   git fetch sedsprintf-upstream
   git subtree add --prefix=sedsprintf_rs sedsprintf-upstream main
   
-- To update the subtree, use:
+- To update the subtree, use the following command (Note all local changes must be committed before you can update):
   ```bash
   git subtree pull --prefix=sedsprintf_rs sedsprintf-upstream main -m "Merge sedsprintf_rs upstream main"
   ```
