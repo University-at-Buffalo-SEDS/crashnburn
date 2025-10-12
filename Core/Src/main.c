@@ -114,6 +114,8 @@ int main(void)
   {
     get_pressure(&hspi1, &barometer_pressure[0]);
     log_telemetry(SEDS_DT_BAROMETER, barometer_pressure, 3);
+
+    telemetry_process_all(20);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

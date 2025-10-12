@@ -3,10 +3,44 @@
 #include <string.h>
 #include "sedsprintf.h"
 #include "stm32g4xx_hal.h"
+// ---- 32->64 bit tick extender so Router's wrapping_sub works correctly ----
+static uint64_t stm_now_ms(void *user)
+{
+    (void)user;
+
+    // Extend 32-bit HAL_GetTick() to a monotonic 64-bit milliseconds counter.
+    // If you might call this from ISRs too, guard the critical section.
+    static uint32_t last32 = 0;
+    static uint64_t high   = 0;
+
+    uint32_t cur32 = HAL_GetTick();
+    if (cur32 < last32) {
+        // 32-bit wrap occurred (~49.7 days)
+        high += (1ULL << 32);
+    }
+    last32 = cur32;
+    return high | (uint64_t)cur32;
+}
 
 
 // Define the global router state here (one definition only)
 RouterState g_router = { .r = NULL, .created = 0 };
+
+
+// ---- Public convenience wrappers ----
+
+SedsResult telemetry_process_all(uint32_t timeout_ms)
+{
+    if (!g_router.r) {
+        if (init_telemetry_router() != SEDS_OK) return SEDS_ERR;
+    }
+    return seds_router_process_all_queues_with_timeout(
+        g_router.r,
+        stm_now_ms,   // clock callback
+        NULL,         // user cookie
+        timeout_ms    // 0 => drain fully; >0 => time-bounded
+    );
+}
 
 // --- TX: convert your bytes to CAN frames and send via HAL later; stub for now ---
 SedsResult tx_send(const uint8_t *bytes, size_t len, void *user)
@@ -87,5 +121,5 @@ SedsResult log_telemetry(SedsDataType data_type, const float *data, size_t data_
 
     // If your C API uses an overload with timestamp, call that; otherwise plain log:
     // e.g., seds_router_log_ts(g_router.r, data_type, data, (uint32_t)data_len, ts);
-    return seds_router_log(g_router.r, data_type, data, data_len, ts);
+    return seds_router_log_queue(g_router.r, data_type, data, data_len, ts);
 }
