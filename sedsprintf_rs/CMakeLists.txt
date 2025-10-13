@@ -56,8 +56,7 @@ file(GLOB_RECURSE RS_SRC CONFIGURE_DEPENDS
 )
 
 # --- Build rule: make the real artifacts be the OUTPUTs
-# NOTE: This assumes your Rust crate is configured to emit BOTH staticlib and cdylib
-# (Cargo.toml: [lib] crate-type = ["staticlib", "cdylib"])
+# (Cargo.toml: [lib] crate-type = ["staticlib"])
 add_custom_command(
         OUTPUT
         "${RS_LIB_DBG}" "${RS_LIB_REL}"
@@ -91,17 +90,7 @@ add_dependencies(sedsprintf_rs sedsprintf_rs_build)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/noexecstack.S"
         "    .section .note.GNU-stack,\"\",%progbits\n")
 
-# Interface helper that injects the sentinel + flags into any consumer
-
-#add_library(sedsprintf_rs_noexecstack INTERFACE)
-## Make the sentinel compile into the final consumer target (requires parent to have ASM enabled)
-#target_sources(sedsprintf_rs_noexecstack INTERFACE
-#        "${CMAKE_CURRENT_BINARY_DIR}/noexecstack.S"
-#)
-
-
-# Prevent assembler from marking stack executable; force linker header to noexec
-
+# Prevent assembler from marking stack executable; force linker header to noexecstack
 include(CheckLinkerFlag)
 include(CheckCCompilerFlag)
 check_linker_flag(C "-Wl,-z,noexecstack" HAVE_LD_NOEXECSTACK)
@@ -113,12 +102,10 @@ endif ()
 
 # --- Make final ELF have non-exec stack where supported (Linux/*BSD)
 if (SEDSPRINTF_STM_BUILD)  # ELF platforms only
-
     # These flags are understood by GCC/Clang toolchains on ELF
     target_compile_options(sedsprintf_rs INTERFACE -Wa,--noexecstack)
     target_link_options(sedsprintf_rs INTERFACE -Wl,-z,noexecstack)
 endif ()
-
 
 # Optional niceties
 add_library(sedsprintf_rs::sedsprintf_rs ALIAS sedsprintf_rs)
