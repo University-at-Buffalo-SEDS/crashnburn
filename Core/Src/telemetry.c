@@ -36,8 +36,6 @@ SedsResult telemetry_process_all(uint32_t timeout_ms)
     }
     return seds_router_process_all_queues_with_timeout(
         g_router.r,
-        stm_now_ms,   // clock callback
-        NULL,         // user cookie
         timeout_ms    // 0 => drain fully; >0 => time-bounded
     );
 }
@@ -91,6 +89,7 @@ SedsResult init_telemetry_router(void)
     SedsRouter *r = seds_router_new(
         tx_send,
         NULL,  // tx_user
+        stm_now_ms,
         locals,
         (uint32_t)(sizeof(locals) / sizeof(locals[0]))
     );
