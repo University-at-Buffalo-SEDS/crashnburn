@@ -67,7 +67,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf_rs)
 
 
 # add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf)
-# target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf::sedsprintf)
+# target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf)
 # Add linked libraries
 target_link_libraries(
     stm32cubemx
