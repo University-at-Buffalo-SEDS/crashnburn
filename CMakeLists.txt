@@ -65,6 +65,9 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf_rs)
 target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf_rs)
 
+
+# add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf)
+# target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf::sedsprintf)
 # Add linked libraries
 target_link_libraries(
     stm32cubemx
