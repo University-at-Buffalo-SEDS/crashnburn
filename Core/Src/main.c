@@ -113,6 +113,7 @@ int main(void)
   while (1)
   {
     get_pressure(&hspi1, &barometer_pressure[0]);
+    
     log_telemetry(SEDS_DT_BAROMETER, barometer_pressure, 3);
 
     telemetry_process_all(20);
@@ -248,6 +249,20 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+#ifdef __GNUC__
+int _write(int file, char *ptr, int len)
+{
+  CDC_Transmit_FS((uint8_t *)ptr, len);
+  return len;
+}
+#else
+int fputc(int ch, FILE *f)
+{
+  CDC_Transmit_FS((uint8_t *)&ch, 1);
+  return ch;
+}
+#endif /* __GNUC__ */
 
 /**
  * @brief  This function is executed in case of error occurrence.
