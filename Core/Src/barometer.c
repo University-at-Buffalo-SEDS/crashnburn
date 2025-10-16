@@ -69,7 +69,7 @@ static HAL_StatusTypeDef read_trim_pars(SPI_HandleTypeDef *hspi)
         {NVM_PAR_P11, FIELD_U8, &calib_data.par_p11},
     };
 
-    for (uint8_t i = 0; i < (uint8_t)(sizeof table / sizeof table[0]); ++i)
+    for (uint8_t i = 0; i < (uint8_t)(sizeof(table) / sizeof (table[0])); ++i)
     {
         uint8_t len = (table[i].type == FIELD_U16) ? 2u : 1u;
         st = barometer_read_reg(hspi, table[i].reg, buf, len);
@@ -96,7 +96,7 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
     // Soft reset
     uint8_t wr[2] = {CMD | BAROMETER_SPI_WRITE, BAROMETER_SOFTRESET};
     BARO_CS_LOW();
-    st = HAL_SPI_Transmit(hspi, wr, sizeof wr, BAROMETER_INITIALIZATION_TIMEOUT);
+    st = HAL_SPI_Transmit(hspi, wr, sizeof (wr), BAROMETER_INITIALIZATION_TIMEOUT);
     BARO_CS_HIGH();
     if (st != HAL_OK)
         return st;
@@ -108,7 +108,7 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
         PWR_CTRL & BAROMETER_SPI_WRITE, BAROMETER_NORMAL_MODE,
         OSR & BAROMETER_SPI_WRITE, PRESSURE_RES_HIGH};
     BARO_CS_LOW();
-    st = HAL_SPI_Transmit(hspi, cfg, sizeof cfg, BAROMETER_INITIALIZATION_TIMEOUT);
+    st = HAL_SPI_Transmit(hspi, cfg, sizeof(cfg), BAROMETER_INITIALIZATION_TIMEOUT);
     BARO_CS_HIGH();
     if (st != HAL_OK)
         return st;
@@ -148,7 +148,7 @@ static float BMP390_compensate_temperature(uint32_t uncomp_temp)
 HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c)
 {
     uint8_t tbuf[3];
-    HAL_StatusTypeDef st = barometer_read_reg(hspi, DATA_3, tbuf, sizeof tbuf);
+    HAL_StatusTypeDef st = barometer_read_reg(hspi, DATA_3, tbuf, sizeof (tbuf));
     if (st != HAL_OK)
         return st;
 
@@ -162,7 +162,7 @@ HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c)
 HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *temperature_c, float *pressure_pa)
 {
     uint8_t buf[6];
-    HAL_StatusTypeDef st = barometer_read_reg(hspi, DATA_0, buf, sizeof buf);
+    HAL_StatusTypeDef st = barometer_read_reg(hspi, DATA_0, buf, sizeof (buf));
     if (st != HAL_OK)
         return st;
 
