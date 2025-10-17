@@ -1,35 +1,24 @@
 #pragma once
 #include "stm32g4xx_hal.h"
 #include <math.h>
+#include <stdint.h>
 
-// General RO
+// ----- Registers (unchanged) -----
 #define CHIP_ID 0x00
 #define REV_ID 0x01
 #define ERR_REG 0x02
 #define STATUS 0x03
-
-// Metrics (one 24 bit reading is split across 3 registers)
-
-// Pressure RO
 #define DATA_0 0x04
 #define DATA_1 0x05
 #define DATA_2 0x06
-
-// Temperature RO
 #define DATA_3 0x07
 #define DATA_4 0x08
 #define DATA_5 0x09
-
-// Sensor time RO
 #define SENSORTIME_0 0x0C
 #define SENSORTIME_1 0x0D
 #define SENSORTIME_2 0x0E
-
-// Event (sensor status flags) and interrupt status RO
 #define EVENT 0x10
 #define INT_STATUS 0x11
-
-// FIFO (0x12-14 RO; 0x15-18 RW)
 #define FIFO_LENGTH_0 0x12
 #define FIFO_LENGTH_1 0x13
 #define FIFO_DATA 0x14
@@ -37,8 +26,6 @@
 #define FIFO_WTM_1 0x16
 #define FIFO_CONFIG_0 0x17
 #define FIFO_CONFIG_1 0x18
-
-// Genral interface RW
 #define INT_CTRL 0x19
 #define IF_CONF 0x1A
 #define PWR_CTRL 0x1B
@@ -47,7 +34,6 @@
 #define CONFIG 0x1F
 #define CMD 0x7E
 
-// NVM registers (calibration data)
 #define NVM_PAR_T1 0x31
 #define NVM_PAR_T2 0x33
 #define NVM_PAR_T3 0x35
@@ -62,13 +48,16 @@
 #define NVM_PAR_P9 0x42
 #define NVM_PAR_P10 0x44
 #define NVM_PAR_P11 0x45
-
-// Values
-
+// ----- Values -----
 #define BAROMETER_SOFTRESET 0xB6
 #define BAROMETER_GPIO_PIN GPIO_PIN_13
 #define BAROMETER_GPIO_PORT GPIOB
-#define BAROMETER_SPI_READ (1 << 6)
+
+
+#define BAROMETER_READ_BIT 0x80u
+
+// SPI control-bit helpers
+#define BAROMETER_SPI_READ (1 << 6) 
 #define BAROMETER_SPI_WRITE (~BAROMETER_SPI_READ)
 
 // Power modes
@@ -84,17 +73,17 @@
 #define PRESSURE_RES_ULTRA_HIGH 0b100
 #define PRESSURE_RES_HIGHEST 0b101
 
-// Read / write
+// RW timings
 #define BAROMETER_INITIALIZATION_TIMEOUT 50U
-#define BAROMETER_READ_BIT 0x80
 #define BAROMETER_READ_TIMEOUT 10U
 
-#define BARO_CS_LOW HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_RESET)
-#define BARO_CS_HIGH HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_SET)
+#define BARO_CS_LOW() HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_RESET)
+#define BARO_CS_HIGH() HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_SET)
 
 #define SEA_LEVEL_PRESSURE 101325.0f
 
-static struct BMP390_calib_data
+// ----- Types -----
+typedef struct
 {
     uint16_t par_t1;
     uint16_t par_t2;
@@ -111,36 +100,18 @@ static struct BMP390_calib_data
     int8_t par_p10;
     int8_t par_p11;
     float t_lin;
-} calib_data;
+} BMP390_calib_data_t;
 
-typedef enum
-{
-    FIELD_U8,
-    FIELD_U16
-} FieldType;
+// Extern storage (defined in barometer.c)
+extern BMP390_calib_data_t calib_data;
+extern float ground_level_pressure;
 
-typedef struct
-{
-    uint8_t reg;
-    FieldType type;
-    void *dest;
-} TrimEntry;
-
-float BMP390_compensate_pressure(uint32_t uncomp_press);
-float BMP390_compensate_temperature(uint32_t uncomp_temp);
-static float ground_level_pressure = 0.0f;
-static inline uint32_t u24(const uint8_t b0, const uint8_t b1, const uint8_t b2);
-
+// API
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
-
 HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *temperature_c, float *pressure_pa);
-
 HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa);
-
 HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c);
 
-
-//the value is in meters
+// altitude helpers
 float compute_relative_altitude(float pressure);
-//the value is in meters
 float get_relative_altitude(SPI_HandleTypeDef *hspi);

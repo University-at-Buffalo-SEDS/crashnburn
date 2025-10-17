@@ -27,7 +27,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y dpkg expect git-lfs
           sudo apt-get remove -y cmake
-          git-lfs pull
+          rustup target add thumbv7em-none-eabihf
+          # git-lfs pull
+          wget -O CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh "https://files.rylanswebsite.com/publicdocuments/files/UBSEDS/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh"
+          git submodule update --init --recursive
           # Move/ensure the installer is at repo root (adjust if it's already there)
           if [ -f "CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh" ]; then
             mv CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh .
