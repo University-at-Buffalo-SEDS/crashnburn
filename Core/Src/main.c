@@ -26,6 +26,7 @@
 #include <time.h>
 #include "barometer.h"
 #include "telemetry.h"
+#include "usbd_cdc_if.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
