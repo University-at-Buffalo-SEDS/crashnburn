@@ -94,7 +94,7 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
     HAL_StatusTypeDef st;
 
     // Soft reset
-    uint8_t wr[2] = {CMD | BAROMETER_SPI_WRITE, BAROMETER_SOFTRESET};
+    uint8_t wr[2] = {CMD & BAROMETER_SPI_WRITE, BAROMETER_SOFTRESET};
     BARO_CS_LOW();
     st = HAL_SPI_Transmit(hspi, wr, sizeof (wr), BAROMETER_INITIALIZATION_TIMEOUT);
     BARO_CS_HIGH();

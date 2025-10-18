@@ -57,8 +57,8 @@
 #define BAROMETER_READ_BIT 0x80u
 
 // SPI control-bit helpers
-#define BAROMETER_SPI_READ (1 << 6) 
-#define BAROMETER_SPI_WRITE (~BAROMETER_SPI_READ)
+#define BAROMETER_SPI_READ (1 << 7) 
+#define BAROMETER_SPI_WRITE (0 << 7)
 
 // Power modes
 #define BAROMETER_SLEEP_MODE 0x00
