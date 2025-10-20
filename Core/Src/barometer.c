@@ -20,7 +20,7 @@ float ground_level_pressure = 0.0f;
 // ---- SPI read (read = addr|0x80) ----
 static HAL_StatusTypeDef barometer_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out_data, uint16_t out_len)
 {
-    uint8_t tx[1] = {(uint8_t)(reg | BAROMETER_SPI_READ)};
+    uint8_t tx[1] = {(uint8_t)(reg | BAROMETER_SPI_READ_MASK)};
 
     BARO_CS_LOW();
     HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, tx, 1, BAROMETER_READ_TIMEOUT);
@@ -94,7 +94,7 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
     HAL_StatusTypeDef st;
 
     // Soft reset
-    uint8_t wr[2] = {CMD & BAROMETER_SPI_WRITE, BAROMETER_SOFTRESET};
+    uint8_t wr[2] = {CMD & BAROMETER_SPI_WRITE_MASK, BAROMETER_SOFTRESET};
     BARO_CS_LOW();
     st = HAL_SPI_Transmit(hspi, wr, sizeof (wr), BAROMETER_INITIALIZATION_TIMEOUT);
     BARO_CS_HIGH();
@@ -105,8 +105,8 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi)
 
     // Set normal mode + pressure oversampling
     uint8_t cfg[] = {
-        PWR_CTRL & BAROMETER_SPI_WRITE, BAROMETER_NORMAL_MODE,
-        OSR & BAROMETER_SPI_WRITE, PRESSURE_RES_HIGH};
+        PWR_CTRL & ~BAROMETER_SPI_WRITE_MASK, BAROMETER_NORMAL_MODE,
+        OSR & BAROMETER_SPI_WRITE_MASK, PRESSURE_RES_HIGH};
     BARO_CS_LOW();
     st = HAL_SPI_Transmit(hspi, cfg, sizeof(cfg), BAROMETER_INITIALIZATION_TIMEOUT);
     BARO_CS_HIGH();
