@@ -111,7 +111,7 @@ SedsResult init_telemetry_router(void)
 
     g_router.r = r;
     g_router.created = 1;
-    g_router.start_time = host_now_ms(NULL);
+    g_router.start_time = stm_now_ms(NULL);
     return SEDS_OK;
 }
 
