@@ -53,6 +53,7 @@
 #define BAROMETER_GPIO_PIN GPIO_PIN_13
 #define BAROMETER_GPIO_PORT GPIOB
 
+#define BARO_OSR_Px8_Tx1  ((PRESSURE_RES_HIGH & 0x07) | (0u << 3))
 
 #define BAROMETER_READ_BIT 0x80u
 
@@ -63,7 +64,7 @@
 // Power modes
 #define BAROMETER_SLEEP_MODE 0x00
 #define BAROMETER_FORCED_MODE 0x01
-#define BAROMETER_NORMAL_MODE 0x03
+#define BAROMETER_NORMAL_MODE 0x33
 
 // Pressure oversampling (precision)
 #define PRESSURE_RES_ULTRA_LOW 0x00
@@ -92,7 +93,7 @@ typedef struct
     int16_t par_p2;
     int8_t par_p3;
     int8_t par_p4;
-    int16_t par_p5;
+    uint16_t par_p5;
     uint16_t par_p6;
     int8_t par_p7;
     int8_t par_p8;
