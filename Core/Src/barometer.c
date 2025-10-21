@@ -137,8 +137,8 @@ static HAL_StatusTypeDef bmp390_wait_reset_ready(SPI_HandleTypeDef *hspi,
 
   // Optionally check it really was set (after soft reset it should be 1)
   if ((v & (1u << 0)) == 0) {
-    // Not fatal; could return HAL_OK or HAL_ERROR depending on how strict you
-    // want to be return HAL_ERROR;
+    // Not fatal; could return HAL_OK or HAL_ERROR depending on how strict we want to be 
+    //return HAL_ERROR;
   }
   return HAL_OK;
 }
