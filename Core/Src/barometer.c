@@ -31,8 +31,8 @@ static HAL_StatusTypeDef barometer_read_reg(SPI_HandleTypeDef *hspi,
   HAL_StatusTypeDef st;
 
   // staging buffers: [0] is dummy, [1..out_len] are the real bytes
-  uint8_t tx_dummy_len = (uint8_t)(out_len + 1);
-  uint8_t rx_buf_len = (uint8_t)(out_len + 1);
+  uint16_t tx_dummy_len = (uint16_t)(out_len + 1); // widen to avoid overflow
+  uint16_t rx_buf_len = tx_dummy_len;
 
   // If out_len can be larger than 254, switch to chunked reads instead of VLAs.
   uint8_t tx_dummy[/*out_len+1*/ 256];
