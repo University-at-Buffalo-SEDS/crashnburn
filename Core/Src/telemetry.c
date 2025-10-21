@@ -70,7 +70,7 @@ void rx_asynchronous(const uint8_t * bytes, size_t len)
 SedsResult on_radio_packet(const SedsPacketView * pkt, void * user)
 {
     (void) user;
-    char buf[seds_pkt_to_string_len(pkt)];
+    char buf[1024 * 3];
     SedsResult s = seds_pkt_to_string(pkt, buf, sizeof(buf));
     if (s != SEDS_OK)
     {
@@ -81,7 +81,7 @@ SedsResult on_radio_packet(const SedsPacketView * pkt, void * user)
     return SEDS_OK;
 }
 
-SedsResult init_telemetry_router(void)
+SedsResult init_telemetry_router(void) 
 {
     if (g_router.created && g_router.r)
     {

@@ -104,7 +104,7 @@ int main(void)
   // setup the local endpoints
 
   init_telemetry_router();
-  init_barometer(&hspi1);
+  // init_barometer(&hspi1);
   float barometer_pressure[3] = {1.0f, 0, 0};
 
   /* USER CODE END 2 */

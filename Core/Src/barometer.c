@@ -23,7 +23,7 @@ static HAL_StatusTypeDef barometer_read_reg(SPI_HandleTypeDef *hspi,
                                             uint8_t reg, uint8_t *out_data,
                                             uint16_t out_len) {
   if (out_len == 0 || out_data == NULL) {
-    return HAL_OK;
+    return HAL_ERROR;
   }
 
   const uint8_t ctrl =
