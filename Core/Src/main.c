@@ -114,7 +114,7 @@ int main(void)
   while (1)
   {
     get_pressure(&hspi1, &barometer_pressure[0]);
-    printf("Barometer pressure: %.2f Pa\r\n", barometer_pressure[0]);
+    // printf("Barometer pressure: %.2f Pa\r\n", barometer_pressure[0]);
     log_telemetry_asynchronous(SEDS_DT_BAROMETER, barometer_pressure, 3, sizeof(barometer_pressure[0]));
 
     process_all_queues_timeout(20);
