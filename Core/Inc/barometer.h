@@ -120,6 +120,10 @@
 #define BMP390_SEA_LEVEL_PRESSURE_PA       101325.0f
 #define BMP390_HYPSOMETRIC_EXPONENT        0.1903f
 
+// Tunables to prevent drift
+#define ZERO_HYST_M      0.25f   // +/- band around 0 m to avoid chattering
+#define RESET_STEP_M     5.0f    // recalibrate every ~5 m from the last baseline
+
 // ==============================
 // Types
 // ==============================

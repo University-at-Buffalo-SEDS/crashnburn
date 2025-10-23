@@ -380,11 +380,47 @@ HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa) {
 }
 
 // ---- Altitude helpers ----
+static inline float altitude_from_pressures(float p, float p0) {
+    return 44330.0f * (1.0f - powf(p / p0, BMP390_HYPSOMETRIC_EXPONENT));
+}
+
+static inline float pressure_for_altitude(float p, float alt) {
+    // compute baseline p0 that makes this pressure correspond to given alt
+    const float k = BMP390_HYPSOMETRIC_EXPONENT;
+    float denom = 1.0f - (alt / 44330.0f);
+    if (denom <= 0.0f) denom = 1e-6f;
+    return p / powf(denom, 1.0f / k);
+}
+
 float compute_relative_altitude(float pressure) {
-  if (ground_level_pressure <= 0.0f)
-    return 0.0f;
-  return 44330.0f * (1.0f - powf(pressure / ground_level_pressure,
-                                 BMP390_HYPSOMETRIC_EXPONENT));
+    static float prev_rel_alt = 0.0f;
+
+    if (ground_level_pressure <= 0.0f || !isfinite(pressure)) {
+        ground_level_pressure = pressure;
+        return 0.0f;
+    }
+
+    float rel_alt = altitude_from_pressures(pressure, ground_level_pressure);
+
+    uint8_t entered_zero_band =
+        (fabsf(rel_alt) <= ZERO_HYST_M) && (fabsf(prev_rel_alt) > ZERO_HYST_M);
+    uint8_t moved_step = (fabsf(rel_alt) >= RESET_STEP_M);
+
+    if (entered_zero_band) {
+        // Reanchor to true 0
+        ground_level_pressure = pressure;
+        prev_rel_alt = 0.0f;
+        return 0.0f;
+    }
+
+    if (moved_step) {
+        // Compute the baseline pressure that keeps this altitude consistent,
+        ground_level_pressure = pressure_for_altitude(pressure, rel_alt);
+        // no change to rel_bias — continuous by construction
+    }
+
+    prev_rel_alt = rel_alt;
+    return rel_alt;
 }
 
 float get_relative_altitude(SPI_HandleTypeDef *hspi) {
