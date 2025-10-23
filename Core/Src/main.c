@@ -115,8 +115,9 @@ int main(void) {
   // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
-    get_temperature_pressure_altitude_non_blocking(&hspi1, &barometer_pressure[1],
-                             &barometer_pressure[0], &barometer_pressure[2]);
+    get_temperature_pressure_altitude_non_blocking(
+        &hspi1, &barometer_pressure[1], &barometer_pressure[0],
+        &barometer_pressure[2]);
 
     log_telemetry_asynchronous(SEDS_DT_BAROMETER, barometer_pressure,
                                sizeof(barometer_pressure) /
