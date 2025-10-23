@@ -62,21 +62,6 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
-static void die(const char *fmt, ...) {
-  char buf[256]; // enough for most debug strings
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, args);
-  va_end(args);
-
-  // freeze the system so you can see the message in CDC output
-  while (1) {
-    printf("FATAL: %s\r\n", buf);
-
-    HAL_Delay(1000);
-  }
-}
-
 /**
  * @brief  The application entry point.
  * @retval int
@@ -124,11 +109,11 @@ int main(void) {
   /* USER CODE END 2 */
 
   /* Infinite loop */
+  // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
-    get_temperature_pressure(&hspi1, &barometer_pressure[1],
-                             &barometer_pressure[0]);
-    barometer_pressure[2] = get_relative_altitude(&hspi1);
+    get_temperature_pressure_altitude(&hspi1, &barometer_pressure[1],
+                             &barometer_pressure[0], &barometer_pressure[2]);
 
     log_telemetry_asynchronous(SEDS_DT_BAROMETER, barometer_pressure,
                                sizeof(barometer_pressure) /
@@ -136,7 +121,7 @@ int main(void) {
                                sizeof(barometer_pressure[0]));
 
     process_all_queues_timeout(20);
-    HAL_Delay(50);
+    HAL_Delay(5);
 
     /* USER CODE END WHILE */
 

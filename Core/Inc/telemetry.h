@@ -56,6 +56,7 @@ SedsResult process_rx_queue_timeout(uint32_t timeout_ms);
 
 SedsResult process_all_queues_timeout(uint32_t timeout_ms);
 
+void die(const char *fmt, ...);
 
 #ifdef __cplusplus
 }

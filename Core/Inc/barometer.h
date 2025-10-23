@@ -52,25 +52,27 @@
 #define BAROMETER_SOFTRESET 0xB6
 #define BAROMETER_GPIO_PIN GPIO_PIN_13
 #define BAROMETER_GPIO_PORT GPIOB
-#define BARO_RW_TIMEOUT_MS               (100U)
+#define BARO_RW_TIMEOUT_MS (100U)
 
-#define BARO_OSR_Px8_Tx1  ((PRESSURE_RES_HIGH & 0x07) | (0u << 3))
-
+#define BARO_OSR_VALUE (0x0D)
+#define BARO_ODR_VALUE (0x04)
+#define BARO_PWR_CTRL_VALUE (0x03)
+#define CHIP_ID_VALUE 0x60
 #define BAROMETER_READ_BIT 0x80u
 
 // SPI control-bit helpers
-#define BAROMETER_SPI_READ_MASK   0x80
-#define BAROMETER_SPI_WRITE_MASK  0x7F
+#define BAROMETER_SPI_READ_MASK 0x80
+#define BAROMETER_SPI_WRITE_MASK 0x7F
 
 // Power modes
-#define PWR_CTRL_PRESS_EN      (1u << 0)
-#define PWR_CTRL_TEMP_EN       (1u << 1)
-#define PWR_CTRL_MODE_SHIFT    2
-#define PWR_CTRL_MODE_SLEEP    0u
-#define PWR_CTRL_MODE_FORCED   1u   // 01 or 10 are forced
-#define PWR_CTRL_MODE_NORMAL   3u   // 11 = normal
-#define BAROMETER_NORMAL_MODE_VALUE \
-    (PWR_CTRL_PRESS_EN | PWR_CTRL_TEMP_EN | (PWR_CTRL_MODE_NORMAL << PWR_CTRL_MODE_SHIFT))
+#define PWR_CTRL_PRESS_EN (1u << 0)
+#define PWR_CTRL_TEMP_EN (1u << 1)
+#define PWR_CTRL_MODE_SHIFT 2
+#define PWR_CTRL_MODE_SLEEP 0x13
+#define PWR_CTRL_MODE_NORMAL 0x33 // 11 = normal
+#define BAROMETER_NORMAL_MODE_VALUE                                            \
+  (PWR_CTRL_PRESS_EN | PWR_CTRL_TEMP_EN |                                      \
+   (PWR_CTRL_MODE_NORMAL << PWR_CTRL_MODE_SHIFT))
 
 // Pressure oversampling (precision)
 #define PRESSURE_RES_ULTRA_LOW 0x00
@@ -84,29 +86,33 @@
 #define BAROMETER_INITIALIZATION_TIMEOUT 50U
 #define BAROMETER_READ_TIMEOUT 10U
 
-#define BARO_CS_LOW() HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_RESET)
-#define BARO_CS_HIGH() HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_SET)
+#define BARO_CS_LOW()                                                          \
+  HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_RESET)
+#define BARO_CS_HIGH()                                                         \
+  HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_SET)
 
 #define SEA_LEVEL_PRESSURE 101325.0f
 
 // ----- Types -----
-typedef struct
-{
-    uint16_t par_t1;
-    uint16_t par_t2;
-    int8_t par_t3;
-    int16_t par_p1;
-    int16_t par_p2;
-    int8_t par_p3;
-    int8_t par_p4;
-    uint16_t par_p5;
-    uint16_t par_p6;
-    int8_t par_p7;
-    int8_t par_p8;
-    int16_t par_p9;
-    int8_t par_p10;
-    int8_t par_p11;
-    float t_lin;
+typedef struct {
+  // scaled, floating-point coefficients (datasheet §8.4)
+  float par_t1;
+  float par_t2;
+  float par_t3;
+
+  float par_p1;
+  float par_p2;
+  float par_p3;
+  float par_p4;
+  float par_p5;
+  float par_p6;
+  float par_p7;
+  float par_p8;
+  float par_p9;
+  float par_p10;
+  float par_p11;
+
+  float t_lin; // computed by temperature compensation
 } BMP390_calib_data_t;
 
 // Extern storage (defined in barometer.c)
@@ -115,16 +121,27 @@ extern float ground_level_pressure;
 
 // API
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi);
-HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi, float *temperature_c, float *pressure_pa);
+HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi,
+                                           float *temperature_c,
+                                           float *pressure_pa);
+HAL_StatusTypeDef get_temperature_pressure_altitude(SPI_HandleTypeDef *hspi,
+                                                    float *temperature_c,
+                                                    float *pressure_pa,
+                                                    float *altitude_m);
 HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa);
-HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi, float *temperature_c);
+HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi,
+                                  float *temperature_c);
 
-HAL_StatusTypeDef baro_read_u8(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *val);
+HAL_StatusTypeDef baro_read_u8(SPI_HandleTypeDef *hspi, uint8_t reg,
+                               uint8_t *val);
 
-HAL_StatusTypeDef baro_write_u8(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t val);
-HAL_StatusTypeDef baro_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *out, uint16_t len);
-HAL_StatusTypeDef baro_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg, const uint8_t *data, uint16_t len);
-
+HAL_StatusTypeDef baro_write_u8(SPI_HandleTypeDef *hspi, uint8_t reg,
+                                uint8_t val);
+HAL_StatusTypeDef baro_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg,
+                                uint8_t *out, uint16_t len);
+HAL_StatusTypeDef baro_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg,
+                                 const uint8_t *data, uint16_t len);
+void baro_rezero(SPI_HandleTypeDef *hspi);
 // altitude helpers
 float compute_relative_altitude(float pressure);
 float get_relative_altitude(SPI_HandleTypeDef *hspi);

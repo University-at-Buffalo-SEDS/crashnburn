@@ -3,6 +3,7 @@
 #include <string.h>
 #include "sedsprintf.h"
 #include "stm32g4xx_hal.h"
+#include <stdarg.h>
 // ---- 32->64 bit tick extender so Router's wrapping_sub works correctly ----
 static uint64_t stm_now_ms(void *user)
 {
@@ -212,4 +213,20 @@ SedsResult process_all_queues_timeout(uint32_t timeout_ms)
         g_router.r,
         timeout_ms
     );
+}
+
+
+void die(const char *fmt, ...) {
+  char buf[256]; // enough for most debug strings
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+
+  // freeze the system so you can see the message in CDC output
+  while (1) {
+    printf("FATAL: %s\r\n", buf);
+
+    HAL_Delay(1000);
+  }
 }
