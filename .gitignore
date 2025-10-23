@@ -1,2 +1,15 @@
 /.vscode
 /build
+/.settings
+/.clangd
+/.cache
+.DS_Store
+CMakeCache.txt
+build.ninja
+compile_commands.json
+CMakePresets.json
+CMakeFiles
+Makefile
+cmake_install.cmake
+
+.idea/
