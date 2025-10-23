@@ -25,6 +25,7 @@
 #include "telemetry.h"
 #include "usbd_cdc_if.h"
 #include <inttypes.h>
+#include <sedsprintf.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -97,7 +98,9 @@ int main(void) {
 
   // setup the local endpoints
 
-  init_telemetry_router();
+  if (init_telemetry_router() != SEDS_OK) {
+    die("telemetry router init failed\r\n");
+  }
 
   if (init_barometer(&hspi1) != HAL_OK) {
 
@@ -112,7 +115,7 @@ int main(void) {
   // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
-    get_temperature_pressure_altitude(&hspi1, &barometer_pressure[1],
+    get_temperature_pressure_altitude_non_blocking(&hspi1, &barometer_pressure[1],
                              &barometer_pressure[0], &barometer_pressure[2]);
 
     log_telemetry_asynchronous(SEDS_DT_BAROMETER, barometer_pressure,

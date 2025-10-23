@@ -129,9 +129,19 @@ HAL_StatusTypeDef get_temperature_pressure_altitude(SPI_HandleTypeDef *hspi,
                                                     float *pressure_pa,
                                                     float *altitude_m);
 HAL_StatusTypeDef get_pressure(SPI_HandleTypeDef *hspi, float *pressure_pa);
-HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi,
+HAL_StatusTypeDef get_temperature_non_blocking(SPI_HandleTypeDef *hspi,
                                   float *temperature_c);
 
+HAL_StatusTypeDef get_temperature_pressure_non_blocking(SPI_HandleTypeDef *hspi,
+                                           float *temperature_c,
+                                           float *pressure_pa);
+HAL_StatusTypeDef get_temperature_pressure_altitude_non_blocking(SPI_HandleTypeDef *hspi,
+                                                    float *temperature_c,
+                                                    float *pressure_pa,
+                                                    float *altitude_m);
+HAL_StatusTypeDef get_pressure_non_blocking(SPI_HandleTypeDef *hspi, float *pressure_pa);
+HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi,
+                                  float *temperature_c);
 HAL_StatusTypeDef baro_read_u8(SPI_HandleTypeDef *hspi, uint8_t reg,
                                uint8_t *val);
 
@@ -145,3 +155,4 @@ void baro_rezero(SPI_HandleTypeDef *hspi);
 // altitude helpers
 float compute_relative_altitude(float pressure);
 float get_relative_altitude(SPI_HandleTypeDef *hspi);
+float get_relative_altitude_non_blocking(SPI_HandleTypeDef *hspi);

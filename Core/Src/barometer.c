@@ -1,4 +1,5 @@
 #include "barometer.h"
+#include "stm32g4xx_hal_def.h"
 #include "telemetry.h"
 #include <math.h>
 #include <string.h>
@@ -220,6 +221,28 @@ static HAL_StatusTypeDef baro_wait_drdy(SPI_HandleTypeDef *hspi,
   }
 }
 
+static HAL_StatusTypeDef baro_check_drdy(SPI_HandleTypeDef *hspi,
+                                        uint32_t extra_ms) {
+  // Read current ODR to compute period
+  uint8_t odr_sel = 0;
+  if (baro_read_u8(hspi, ODR, &odr_sel) != HAL_OK)
+    return HAL_ERROR;
+
+
+  uint8_t s = 0;
+  if (baro_read_u8(hspi, STATUS, &s) != HAL_OK)
+    return HAL_ERROR;
+
+  // STATUS bits: bit6=temp_drdy, bit5=press_drdy
+  if ((s & CHIP_ID_VALUE) == CHIP_ID_VALUE)
+    return HAL_OK;
+
+
+  return HAL_ERROR;
+
+  
+}
+
 // ---- Device init ----
 HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi) {
   HAL_StatusTypeDef st;
@@ -359,12 +382,10 @@ HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi,
   return HAL_OK;
 }
 
-
-
 HAL_StatusTypeDef get_temperature_pressure_altitude(SPI_HandleTypeDef *hspi,
-                                           float *temperature_c,
-                                           float *pressure_pa
-                                           , float *altitude_m) {
+                                                    float *temperature_c,
+                                                    float *pressure_pa,
+                                                    float *altitude_m) {
   uint8_t buf[6];
   if (baro_wait_drdy(hspi, 5) != HAL_OK)
     die("baro: data not ready\r\n");
@@ -404,4 +425,86 @@ float get_relative_altitude(SPI_HandleTypeDef *hspi) {
   if (get_pressure(hspi, &p) != HAL_OK)
     return -1.0f;
   return compute_relative_altitude(p);
+}
+
+float get_relative_altitude_non_blocking(SPI_HandleTypeDef *hspi) {
+  float p;
+  if (get_pressure(hspi, &p) != HAL_OK)
+    return -1.0f;
+  return compute_relative_altitude(p);
+}
+
+static float last_temp = 0.0f;
+static float last_press = 0.0f;
+
+HAL_StatusTypeDef get_temperature_pressure_non_blocking(SPI_HandleTypeDef *hspi,
+                                           float *temperature_c,
+                                           float *pressure_pa) {
+
+  if (baro_check_drdy(hspi, 5) != HAL_OK) {
+    if (temperature_c)
+      *temperature_c = last_temp;
+    if (pressure_pa)
+      *pressure_pa = last_press;
+    return HAL_OK;
+  }
+  uint8_t buf[6];
+  HAL_StatusTypeDef st = baro_read_reg(hspi, DATA_0, buf, sizeof(buf));
+  if (st != HAL_OK)
+    return st;
+
+  uint32_t adc_p = u24(buf[0], buf[1], buf[2]);
+  uint32_t adc_t = u24(buf[3], buf[4], buf[5]);
+
+  float t_c = compensate_temperature(adc_t);
+  float p_pa = compensate_pressure(adc_p);
+  last_temp = t_c;
+  last_press = p_pa;
+
+  if (temperature_c)
+    *temperature_c = t_c;
+  if (pressure_pa)
+    *pressure_pa = p_pa;
+  return HAL_OK;
+}
+
+HAL_StatusTypeDef get_temperature_pressure_altitude_non_blocking(SPI_HandleTypeDef *hspi,
+                                                    float *temperature_c,
+                                                    float *pressure_pa,
+                                                    float *altitude_m) {
+
+  if (baro_check_drdy(hspi, 5) != HAL_OK) {
+    if (temperature_c)
+      *temperature_c = last_temp;
+    if (pressure_pa)
+      *pressure_pa = last_press;
+    if (altitude_m)
+      *altitude_m = compute_relative_altitude(last_press);
+    return HAL_OK;
+  }
+  uint8_t buf[6];
+  HAL_StatusTypeDef st = baro_read_reg(hspi, DATA_0, buf, sizeof(buf));
+  if (st != HAL_OK)
+    return st;
+
+  uint32_t adc_p = u24(buf[0], buf[1], buf[2]);
+  uint32_t adc_t = u24(buf[3], buf[4], buf[5]);
+
+  float t_c = compensate_temperature(adc_t);
+  float p_pa = compensate_pressure(adc_p);
+  last_temp = t_c;
+  last_press = p_pa;
+
+  if (temperature_c)
+    *temperature_c = t_c;
+  if (pressure_pa)
+    *pressure_pa = p_pa;
+  if (altitude_m)
+    *altitude_m = compute_relative_altitude(p_pa);
+  return HAL_OK;
+}
+
+HAL_StatusTypeDef get_pressure_non_blocking(SPI_HandleTypeDef *hspi, float *pressure_pa) {
+  float temp;
+  return get_temperature_pressure(hspi, &temp, pressure_pa);
 }
