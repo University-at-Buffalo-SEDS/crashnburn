@@ -21,7 +21,7 @@
   #define __MAIN_H
   #endif
 #include "gyro.h"
-#include "stm32g4xx_hal_conf.h"  
+#include "stm32g4xx_hal_conf.h"
 #include "stm32g4xx_it.h"
 #include "main.h"
 #include "stm32g4xx_hal_spi.h"
@@ -124,8 +124,9 @@ int main(void)
   MX_GPIO_Init();
   MX_SPI1_Init();
   MX_USB_Device_Init();
+  gyro_init(&hspi1);
   /* USER CODE BEGIN 2 */
-
+  gyro_data_t data;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -133,8 +134,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
-    HAL_Delay(100);
+    gyro_read(&hspi1, &data);
+    printf("Gyro X: %d, Gyro Y: %d, Gyro Z: %d", data.rate_x, data.rate_y, data.rate_z);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
