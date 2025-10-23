@@ -13,8 +13,8 @@ jobs:
     permissions:
       contents: write
     env:
-      BUILD_TYPE: ${{ startsWith(github.ref, 'refs/tags/v') && 'Release' || 'Debug' }}
-      BUILD_DIR: ${{ startsWith(github.ref, 'refs/tags/v') && 'build/release' || 'build/debug' }}
+      BUILD_TYPE: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || 'debug' }}
+      BUILD_DIR: ${{ startsWith(github.ref, 'refs/tags/v') && 'build/Release' || 'build/Debug' }}
 
     steps:
       - name: Checkout
@@ -143,12 +143,8 @@ jobs:
           which arm-none-eabi-gcc
           arm-none-eabi-gcc --version
 
-      - name: Configure (Setup the build environment)
-        run: |
-          cmake -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake -DCMAKE_COMMAND=cmake -S $(pwd) -B "$BUILD_DIR" -G Ninja
-
       - name: Build (Build the project)
-        run: cmake --build "$BUILD_DIR" --
+        run: ./build_"$BUILD_TYPE".sh
 
       - name: Package firmware (ELF → BIN/HEX/LST/SIZE)
         run: |
