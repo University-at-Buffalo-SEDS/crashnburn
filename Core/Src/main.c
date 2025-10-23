@@ -26,6 +26,9 @@
 #include "main.h"
 #include "stm32g4xx_hal_spi.h"
 #include "usb_device.h"
+#include "usbd_cdc_if.h"
+#include <stdarg.h>
+#include <time.h>
 
 // Define the LED GPIO port and pin if not defined elsewhere
 #ifndef led_GPIO_Port
