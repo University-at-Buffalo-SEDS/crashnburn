@@ -4,7 +4,7 @@ use core::mem::size_of;
 
 
 //----------------------User Editable----------------------
-pub const DEVICE_IDENTIFIER: &str = "TEST_PLATFORM";
+pub const DEVICE_IDENTIFIER: &str = "CrashNBurn";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 #[repr(u32)]
