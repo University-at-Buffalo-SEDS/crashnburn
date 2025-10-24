@@ -16,7 +16,7 @@ static void gyro_cs_high() {
 
 /* These functions should hopefully correctly structure the messages */
 static inline uint8_t GYRO_CMD_WRITE(uint8_t reg) {
-  return (uint8_t)(reg | GYRO_SPI_WRITE_MASK);
+  return (uint8_t)(reg & GYRO_SPI_WRITE_MASK);
 }
 static inline uint8_t GYRO_CMD_READ(uint8_t reg) {
   return (uint8_t)(reg | GYRO_SPI_READ_MASK);
