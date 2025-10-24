@@ -70,7 +70,7 @@ HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi)
     // read chip ID
     uint8_t id;
     gyro_read_register(hspi, GYRO_CHIP_ID, &id);
-    if (id != GYRO_CHIP_ID_VALUE) // this is bad
+    if (id != GYRO_CHIP_ID_VALUE) // check the register value not the register address.
     {
         return HAL_ERROR;
     }
