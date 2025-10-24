@@ -22,7 +22,6 @@ static inline uint8_t GYRO_CMD_READ(uint8_t reg) {
   return (uint8_t)((reg << 1) | 0x01u);
 }
 
-// (Optional) tiny CS settle; keep if your board needs it
 static inline void cs_low_settle(void) {
   gyro_cs_low();
   for (volatile int i = 0; i < 50; ++i) {
