@@ -7,11 +7,11 @@
 // inline functions
 
 static void gyro_cs_low() {
-  HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 }
 
 static void gyro_cs_high() {
-  HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 }
 
 /* These functions should hopefully correctly structure the messages */
@@ -32,20 +32,39 @@ HAL_StatusTypeDef gyro_write_register(SPI_HandleTypeDef *hspi, uint8_t reg,
   return st;
 }
 
-// ---- Single-register read (no special “read bit” in the MSB, no accel-style
-// dummy rules) ----
 HAL_StatusTypeDef gyro_read_register(SPI_HandleTypeDef *hspi, uint8_t reg,
                                      uint8_t *value) {
   if (!value)
     return HAL_ERROR;
+
   uint8_t tx[2] = {GYRO_CMD_READ(reg), 0x00};
   uint8_t rx[2] = {0, 0};
+
   gyro_cs_low();
+  int gypro_pin = HAL_GPIO_ReadPin(gyro_CS_GPIO_Port, gyro_CS_Pin);
+  HAL_Delay(5);
+  printf("GYRO CS pin state first time: %d\n", gypro_pin);
+
   HAL_StatusTypeDef st =
       HAL_SPI_TransmitReceive(hspi, tx, rx, 2, HAL_MAX_DELAY);
+
   gyro_cs_high();
+  gypro_pin = HAL_GPIO_ReadPin(gyro_CS_GPIO_Port, gyro_CS_Pin);
+  HAL_Delay(5);
+  printf("GYRO CS pin state second time: %d\n", gypro_pin);
   if (st == HAL_OK)
     *value = rx[1]; // data clocks out in the second byte
+  while (1) {
+    printf("old GYRO CS pin state: %d\n", gypro_pin);
+
+    printf("tx[0]: 0x%02X, tx[1]: 0x%02X\n", tx[0], tx[1]);
+    gyro_cs_high();
+    int gypro_pin2 = HAL_GPIO_ReadPin(gyro_CS_GPIO_Port, gyro_CS_Pin);
+    printf("GYRO CS pin state: %d\n", gypro_pin2);
+
+    printf("rx[0]: 0x%02X, rx[1]: 0x%02X\n\n", rx[0], rx[1]);
+    HAL_Delay(1000);
+  }
   return st;
 }
 // ---- Burst read (address auto-increments while CS stays low) ----
@@ -65,7 +84,6 @@ HAL_StatusTypeDef gyro_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg,
 // After MX_GPIO_Init(); HAL_Delay(20); MX_SPI1_Init();
 
 HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi) {
-
   if (HAL_SPI_GetState(hspi) != HAL_SPI_STATE_READY) {
     return HAL_BUSY;
   }

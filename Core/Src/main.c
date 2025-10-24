@@ -129,7 +129,7 @@ int main(void) {
   MX_SPI1_Init();
 
   MX_USB_Device_Init();
-
+  HAL_Delay(2000);
   HAL_StatusTypeDef st = gyro_init(&hspi1);
   if (st != HAL_OK) {
     while (1) {
@@ -221,7 +221,7 @@ static void MX_SPI1_Init(void) {
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi1.Init.CRCPolynomial = 7;
   hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
   if (HAL_SPI_Init(&hspi1) != HAL_OK) {
     Error_Handler();
   }
