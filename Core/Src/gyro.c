@@ -24,9 +24,7 @@ static inline uint8_t GYRO_CMD_READ(uint8_t reg) {
 
 static inline void cs_low_settle(void) {
   gyro_cs_low();
-  for (volatile int i = 0; i < 50; ++i) {
-    __NOP();
-  }
+  HAL_Delay(1); // 1 microsecond delay for CS settle
 }
 
 // ---- Single-register write ----
@@ -55,15 +53,6 @@ HAL_StatusTypeDef gyro_read_register(SPI_HandleTypeDef *hspi, uint8_t reg,
     *value = rx[1]; // data clocks out in the second byte
   return st;
 }
-uint8_t bmi088g_probe_id(SPI_HandleTypeDef *hspi) {
-  uint8_t cmd = (0x00u) | 0x01u; // CHIP_ID read
-  uint8_t id = 0x8a;
-  gyro_cs_low();
-  HAL_SPI_Transmit(hspi, &cmd, 1, HAL_MAX_DELAY);
-  HAL_SPI_Receive(hspi, &id, 1, HAL_MAX_DELAY);
-  gyro_cs_high();
-  return id;
-}
 // ---- Burst read (address auto-increments while CS stays low) ----
 HAL_StatusTypeDef gyro_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg,
                                    uint8_t *dst, uint16_t len) {
@@ -88,7 +77,6 @@ HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi) {
 
   // read chip ID
   uint8_t id;
-  uint8_t data = bmi088g_probe_id(hspi);
   HAL_StatusTypeDef st = gyro_read_register(hspi, GYRO_CHIP_ID, &id);
   if (st != HAL_OK) {
 
@@ -98,7 +86,7 @@ HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi) {
       GYRO_CHIP_ID_VALUE) // check the register value not the register address.
   {
     while (1) {
-      printf("Gyro read chip id failed!: hex id 0x%02X\n", data);
+      printf("Gyro read chip id failed!: hex id 0x%02X\n", id);
       HAL_Delay(500);
     }
     return HAL_ERROR;
