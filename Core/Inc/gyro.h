@@ -27,6 +27,8 @@
 #define RATE_X_LSB 0x02
 #define GYRO_CHIP_ID 0x00
 #define GYRO_CHIP_ID_VALUE 0x0F
+#define GYRO_SPI_READ_MASK   0x80u   // bit7 = 1 => read
+#define GYRO_SPI_WRITE_MASK  0x7Fu   // bit7 = 0 => write
 
 
 typedef enum {
@@ -90,7 +92,6 @@ typedef struct {
 
 // static void gyro_cs_high();
 // static void gyro_cs_low();
-
 HAL_StatusTypeDef gyro_write_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t value); // return HAL status
 HAL_StatusTypeDef gyro_read_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data);
 HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi);
