@@ -135,7 +135,7 @@ int main(void)
   {
     /* USER CODE END WHILE */
     gyro_read(&hspi1, &data);
-    printf("Gyro X: %d, Gyro Y: %d, Gyro Z: %d", data.rate_x, data.rate_y, data.rate_z);
+    printf("Gyro X: %d, Gyro Y: %d, Gyro Z: %d\n", data.rate_x, data.rate_y, data.rate_z);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
