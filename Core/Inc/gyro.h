@@ -27,8 +27,8 @@
 #define RATE_X_LSB 0x02
 #define GYRO_CHIP_ID 0x00
 #define GYRO_CHIP_ID_VALUE 0x0F
-#define GYRO_SPI_READ_MASK   0x80u   // bit7 = 1 => read
-#define GYRO_SPI_WRITE_MASK  0x7Fu   // bit7 = 0 => write
+#define GYRO_SPI_READ_MASK   0x01u   // bit7 = 1 => read
+#define GYRO_SPI_WRITE_MASK  0x00u   // bit7 = 0 => write
 
 
 typedef enum {
