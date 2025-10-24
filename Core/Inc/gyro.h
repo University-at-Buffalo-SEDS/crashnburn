@@ -26,6 +26,8 @@
 #define RATE_X_MSB 0x03
 #define RATE_X_LSB 0x02
 #define GYRO_CHIP_ID 0x00
+#define GYRO_CHIP_ID_VALUE 0x0F
+
 
 typedef enum {
     GYRO_RANGE_2000DPS = 0x00,

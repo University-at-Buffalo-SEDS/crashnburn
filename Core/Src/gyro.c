@@ -12,32 +12,51 @@ static void gyro_cs_high()
     HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_SET);
 }
 
-HAL_StatusTypeDef gyro_write_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t value)
-{
-    uint8_t tx[2] = { reg & 0x7F, value };
+// HAL_StatusTypeDef gyro_write_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t value)
+// {
+//     uint8_t tx[2] = { reg & 0x7F, value };
 
+//     gyro_cs_low();
+//     HAL_SPI_Transmit(hspi, tx, 2, 2);
+//     gyro_cs_high();
+//     return HAL_OK;
+// }
+
+// HAL_StatusTypeDef gyro_read_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data)
+// {
+//     HAL_StatusTypeDef st;
+//     uint8_t tx[2] = {reg | 0x80, 0x00};
+//     uint8_t rx[2];
+
+//     gyro_cs_low();
+//     st = HAL_SPI_TransmitReceive(hspi, tx, rx, 2, 2);
+//     if (st != HAL_OK)
+//     {
+//         return st;
+//     }
+//     gyro_cs_high();
+
+//     *data = rx[1];
+
+//     return st;
+// }
+
+/* These functions should hopefully correctly structure the messages */
+HAL_StatusTypeDef gyro_write_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t value) {
+    uint8_t tx[2] = { (uint8_t)((reg << 1) | 0x00), value }; // bit0 = 0 = write
     gyro_cs_low();
-    HAL_SPI_Transmit(hspi, tx, 2, 2);
+    HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, tx, 2, HAL_MAX_DELAY);
     gyro_cs_high();
-    return HAL_OK;
+    return st;
 }
 
-HAL_StatusTypeDef gyro_read_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data)
-{
-    HAL_StatusTypeDef st;
-    uint8_t tx[2] = {reg | 0x80, 0x00};
-    uint8_t rx[2];
-
+HAL_StatusTypeDef gyro_read_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data) {
+    uint8_t tx[2] = { (uint8_t)((reg << 1) | 0x01), 0x00 };  // bit0 = 1 = read
+    uint8_t rx[2] = {0};
     gyro_cs_low();
-    st = HAL_SPI_TransmitReceive(hspi, tx, rx, 2, 2);
-    if (st != HAL_OK)
-    {
-        return st;
-    }
+    HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, 2, HAL_MAX_DELAY);
     gyro_cs_high();
-
-    *data = rx[1];
-
+    if (st == HAL_OK) *data = rx[1]; // second byte carries the data
     return st;
 }
 
@@ -51,7 +70,7 @@ HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi)
     // read chip ID
     uint8_t id;
     gyro_read_register(hspi, GYRO_CHIP_ID, &id);
-    if (id != GYRO_CHIP_ID)
+    if (id != GYRO_CHIP_ID_VALUE) // this is bad
     {
         return HAL_ERROR;
     }
