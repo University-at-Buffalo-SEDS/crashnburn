@@ -21,17 +21,11 @@ static inline uint8_t GYRO_CMD_WRITE(uint8_t reg) {
 static inline uint8_t GYRO_CMD_READ(uint8_t reg) {
   return (uint8_t)((reg << 1) | 0x01u);
 }
-
-static inline void cs_low_settle(void) {
-  gyro_cs_low();
-  HAL_Delay(1); // 1 microsecond delay for CS settle
-}
-
 // ---- Single-register write ----
 HAL_StatusTypeDef gyro_write_register(SPI_HandleTypeDef *hspi, uint8_t reg,
                                       uint8_t value) {
   uint8_t tx[2] = {GYRO_CMD_WRITE(reg), value};
-  cs_low_settle();
+  gyro_cs_low();
   HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, tx, 2, HAL_MAX_DELAY);
   gyro_cs_high();
   return st;
@@ -45,7 +39,7 @@ HAL_StatusTypeDef gyro_read_register(SPI_HandleTypeDef *hspi, uint8_t reg,
     return HAL_ERROR;
   uint8_t tx[2] = {GYRO_CMD_READ(reg), 0x00};
   uint8_t rx[2] = {0, 0};
-  cs_low_settle();
+  gyro_cs_low();
   HAL_StatusTypeDef st =
       HAL_SPI_TransmitReceive(hspi, tx, rx, 2, HAL_MAX_DELAY);
   gyro_cs_high();
@@ -59,7 +53,7 @@ HAL_StatusTypeDef gyro_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg,
   if (!dst || !len)
     return HAL_ERROR;
   uint8_t cmd = GYRO_CMD_READ(start_reg);
-  cs_low_settle();
+  gyro_cs_low();
   HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, &cmd, 1, HAL_MAX_DELAY);
   if (st == HAL_OK)
     st = HAL_SPI_Receive(hspi, dst, len, HAL_MAX_DELAY);
