@@ -1,4 +1,5 @@
 #include "barometer.h"
+#include "stm32g4xx_hal_def.h"
 #include "telemetry.h"
 #include <math.h>
 #include <string.h>
@@ -519,4 +520,27 @@ HAL_StatusTypeDef get_pressure_non_blocking(SPI_HandleTypeDef *hspi,
                                             float *pressure_pa) {
   float temp;
   return get_temperature_pressure_non_blocking(hspi, &temp, pressure_pa);
+}
+
+
+HAL_StatusTypeDef get_temperature_non_blocking(SPI_HandleTypeDef *hspi, float *temperature_c){
+  if (baro_check_drdy(hspi) != HAL_OK) {
+    if (temperature_c)
+      *temperature_c = last_temp;
+    return HAL_OK;
+  }
+
+  uint8_t buf[3];
+  HAL_StatusTypeDef st = baro_read_reg(hspi, DATA_3, buf, sizeof(buf));
+  if (st != HAL_OK)
+    return st;
+
+  uint32_t adc_t = u24(buf[0], buf[1], buf[2]);
+
+  float t_c = compensate_temperature(adc_t);
+  last_temp = t_c;
+
+  if (temperature_c)
+    *temperature_c = t_c;
+  return HAL_OK;
 }

@@ -193,9 +193,11 @@ HAL_StatusTypeDef baro_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg,
                                 uint8_t *out, uint16_t len);
 HAL_StatusTypeDef baro_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg,
                                  const uint8_t *data, uint16_t len);
+HAL_StatusTypeDef get_temperature_non_blocking(SPI_HandleTypeDef *hspi,
+                                               float *temperature_c);
 
-// altitude helpers
-void baro_rezero(SPI_HandleTypeDef *hspi);
+    // altitude helpers
+    void baro_rezero(SPI_HandleTypeDef *hspi);
 float compute_relative_altitude(float pressure);
 float get_relative_altitude(SPI_HandleTypeDef *hspi);
 float get_relative_altitude_non_blocking(SPI_HandleTypeDef *hspi);
