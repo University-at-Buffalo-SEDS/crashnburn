@@ -2,14 +2,6 @@
 #include <string.h>
 #include <stdio.h>
 
-/* Ensure these resolve to your actual net */
-#ifndef gyro_CS_GPIO_Port
-#define gyro_CS_GPIO_Port GPIOB
-#endif
-#ifndef gyro_CS_Pin
-#define gyro_CS_Pin GPIO_PIN_12
-#endif
-
 static inline void gyro_cs_low(void)  { HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_RESET); }
 static inline void gyro_cs_high(void) { HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_SET);   }
 

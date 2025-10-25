@@ -19,6 +19,9 @@
 #define FIFO_CONFIG_1       0x3E
 #define FIFO_DATA           0x3F
 
+#define gyro_CS_GPIO_Port GPIOB
+#define gyro_CS_Pin GPIO_PIN_12
+
 /* WHO_AM_I value (gyro die) */
 #define GYRO_CHIP_ID_VALUE  0x0F   // BMI088 gyro WHOAMI
 /* SPI command helpers (bit7=1 => read; bit7=0 => write) */
