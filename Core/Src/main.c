@@ -17,44 +17,27 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#ifndef __MAIN_H
-#define __MAIN_H
-#include "stm32g4xx_hal.h"
-#include <stdio.h>
-#include <sys/types.h>
-#endif
-#include "gyro.h"
 #include "main.h"
-#include "stm32g4xx_hal_conf.h"
-#include "stm32g4xx_hal_spi.h"
-#include "stm32g4xx_it.h"
+#include "gyro.h"
+#include "stm32g4xx_hal.h"
+#include "stm32g4xx_hal_def.h"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
+#include <inttypes.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 #include <time.h>
 
-
-// Define the LED GPIO port and pin if not defined elsewhere
-#ifndef led_GPIO_Port
-#define led_GPIO_Port GPIOB
-#endif
-
-#ifndef led_Pin
-#define led_Pin GPIO_PIN_0
-#endif
-
-// Define chip select pins for accel, gyro, and baro if not defined elsewhere
-#ifndef accel_CS_Pin
-#define accel_CS_Pin GPIO_PIN_1
-#endif
-
-#ifndef gyro_CS_Pin
-#define gyro_CS_Pin GPIO_PIN_2
-#endif
-
-#ifndef baro_CS_Pin
-#define baro_CS_Pin GPIO_PIN_3
-#endif
+#include "barometer.h"
+#include "telemetry.h"
+#include "usbd_cdc_if.h"
+#include <inttypes.h>
+#include <sedsprintf.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -87,16 +70,7 @@ SPI_HandleTypeDef hspi1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
-void Error_Handler(void);
 /* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
-
 /**
  * @brief  The application entry point.
  * @retval int
@@ -127,28 +101,78 @@ int main(void) {
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_SPI1_Init();
-
   MX_USB_Device_Init();
-  HAL_Delay(2000);
-  HAL_StatusTypeDef st = gyro_init(&hspi1);
-  if (st != HAL_OK) {
-    while (1) {
-      printf("Gyro init failed! %d\n", st);
-      HAL_Delay(500);
-    }
+  /* USER CODE BEGIN 2 */
+  if (init_telemetry_router() != SEDS_OK) {
+    die("telemetry router init failed\r\n");
   }
+
+  if (gyro_init(&hspi1) != HAL_OK) {
+    die("gyro init failed\r\n");
+  }
+
+  // setup the local endpoints
+
+  if (init_barometer(&hspi1) != HAL_OK) {
+
+    die("barometer init failed\r\n");
+  }
+
+  float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
+
   /* USER CODE BEGIN 2 */
   gyro_data_t data;
   /* USER CODE END 2 */
 
   /* Infinite loop */
+  // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
+    //Statuses
+    HAL_StatusTypeDef st;
+    SedsResult r;
+
+    // get the barometer data
+    st = get_temperature_pressure_altitude_non_blocking(
+        &hspi1, &barometer_pressure[1], &barometer_pressure[0],
+        &barometer_pressure[2]);
+      //check the barometer read status
+    if (st != HAL_OK) {
+      die("barometer read failed: %d\r\n", st);
+    }
+
+    // get the gyro data
+    st = gyro_read(&hspi1, &data);
+    //check the gyro read status
+    if (st != HAL_OK) {
+      die("barometer read failed: %d\r\n", st);
+    }
+
+    // ===================logging=================
+    // log barometer data
+    r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA, barometer_pressure,
+                                   sizeof(barometer_pressure) /
+                                       sizeof(barometer_pressure[0]),
+                                   sizeof(barometer_pressure[0]));
+    if (r != SEDS_OK) {
+      die("something went really wrong when logging the data %d\n", r);
+    }
+
+    // log gyro data 
+    //TODO: Integrate the gyro data with the telemetry library.
+    printf("Gyro data: X=%d, Y=%d, Z=%d\r\n", data.rate_x, data.rate_y, data.rate_z);
+
+
+    //====================process queues=================
+    if (process_all_queues_timeout(20) != SEDS_OK) {
+      die("something went really wrong when processing the queues\n");
+    }
+
+    // sleep for 500ms
+    HAL_Delay(500);
 
     /* USER CODE END WHILE */
-    gyro_read(&hspi1, &data);
-    printf("Gyro X: %d, Gyro Y: %d, Gyro Z: %d\n", data.rate_x, data.rate_y,
-           data.rate_z);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -221,7 +245,7 @@ static void MX_SPI1_Init(void) {
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi1.Init.CRCPolynomial = 7;
   hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
   if (HAL_SPI_Init(&hspi1) != HAL_OK) {
     Error_Handler();
   }
@@ -274,6 +298,37 @@ static void MX_GPIO_Init(void) {
 }
 
 /* USER CODE BEGIN 4 */
+
+/* USER CODE END 4 */
+
+/**
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1) {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+#ifdef USE_FULL_ASSERT
+/**
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
+void assert_failed(uint8_t *file, uint32_t line) {
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line
+     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
+     line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */
 
 static volatile uint8_t cdc_tx_lock = 0;
 static void cdc_lock(void) {
@@ -368,33 +423,6 @@ int fputc(int ch, FILE *f) {
   return ch;
 }
 #endif
-/* USER CODE END 4 */
 
-/**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1) {
-  }
-  /* USER CODE END Error_Handler_Debug */
-}
-#ifdef USE_FULL_ASSERT
-/**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
-void assert_failed(uint8_t *file, uint32_t line) {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line
-     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
-     line) */
-  /* USER CODE END 6 */
-}
-#endif /* USE_FULL_ASSERT */
+// Optionally, call this once after USB init:
+void cdc_stdio_unbuffered(void) { setvbuf(stdout, NULL, _IONBF, 0); }

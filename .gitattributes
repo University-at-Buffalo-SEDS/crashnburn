@@ -1,0 +1,1 @@
+CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh filter=lfs diff=lfs merge=lfs -text
