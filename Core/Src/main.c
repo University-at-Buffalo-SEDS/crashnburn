@@ -28,6 +28,16 @@
 #include <string.h>
 #include <time.h>
 
+#include "barometer.h"
+#include "telemetry.h"
+#include "usbd_cdc_if.h"
+#include <inttypes.h>
+#include <sedsprintf.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -95,6 +105,19 @@ int main(void) {
   HAL_StatusTypeDef st;
     st = gyro_init(&hspi1);
 
+  // setup the local endpoints
+
+  if (init_telemetry_router() != SEDS_OK) {
+    die("telemetry router init failed\r\n");
+  }
+
+  if (init_barometer(&hspi1) != HAL_OK) {
+
+    die("barometer init failed\r\n");
+  }
+
+  float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
+
   if (st != HAL_OK) {
   while (1) {
     printf("Gyro init failed! %d\n", st);
@@ -106,8 +129,20 @@ int main(void) {
   /* USER CODE END 2 */
 
   /* Infinite loop */
+  // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
+    get_temperature_pressure_altitude_non_blocking(
+        &hspi1, &barometer_pressure[1], &barometer_pressure[0],
+        &barometer_pressure[2]);
+
+    log_telemetry_asynchronous(SEDS_DT_BAROMETER, barometer_pressure,
+                               sizeof(barometer_pressure) /
+                                   sizeof(barometer_pressure[0]),
+                               sizeof(barometer_pressure[0]));
+
+    process_all_queues_timeout(20);
+    HAL_Delay(5);
 
     /* USER CODE END WHILE */
     gyro_read(&hspi1, &data);
