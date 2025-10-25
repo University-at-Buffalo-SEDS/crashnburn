@@ -155,7 +155,7 @@ int main(void) {
                                        sizeof(barometer_pressure[0]),
                                    sizeof(barometer_pressure[0]));
     if (r != SEDS_OK) {
-      die("something went really wrong when logging the data %d\n", r);
+      die("something went really wrong when logging the barometer data %d\n", r);
     }
 
     // log gyro data 
