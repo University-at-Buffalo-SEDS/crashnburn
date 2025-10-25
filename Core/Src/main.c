@@ -102,14 +102,17 @@ int main(void) {
   MX_SPI1_Init();
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
-  HAL_StatusTypeDef st;
-    st = gyro_init(&hspi1);
+    if (init_telemetry_router() != SEDS_OK) {
+    die("telemetry router init failed\r\n");
+  }
+
+
+if (gyro_init(&hspi1)!= HAL_OK) {
+    die("gyro init failed\r\n");
+  }
 
   // setup the local endpoints
 
-  if (init_telemetry_router() != SEDS_OK) {
-    die("telemetry router init failed\r\n");
-  }
 
   if (init_barometer(&hspi1) != HAL_OK) {
 
@@ -118,12 +121,6 @@ int main(void) {
 
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
 
-  if (st != HAL_OK) {
-  while (1) {
-    printf("Gyro init failed! %d\n", st);
-    HAL_Delay(500);
-  }
-  }
   /* USER CODE BEGIN 2 */
   gyro_data_t data;
   /* USER CODE END 2 */
@@ -141,8 +138,8 @@ int main(void) {
                                    sizeof(barometer_pressure[0]),
                                sizeof(barometer_pressure[0]));
 
-    process_all_queues_timeout(20);
-    HAL_Delay(5);
+    process_all_queues_timeout(200);
+    HAL_Delay(500);
 
     /* USER CODE END WHILE */
     gyro_read(&hspi1, &data);
