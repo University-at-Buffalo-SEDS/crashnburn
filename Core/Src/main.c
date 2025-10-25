@@ -128,18 +128,28 @@ int main(void) {
   // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
-    HAL_StatusTypeDef st = get_temperature_pressure_altitude_non_blocking(
+    //Statuses
+    HAL_StatusTypeDef st;
+    SedsResult r;
+
+    // get the barometer data
+    st = get_temperature_pressure_altitude_non_blocking(
         &hspi1, &barometer_pressure[1], &barometer_pressure[0],
         &barometer_pressure[2]);
+      //check the barometer read status
+    if (st != HAL_OK) {
+      die("barometer read failed: %d\r\n", st);
+    }
 
-    if (st != HAL_OK) {
-      die("barometer read failed: %d\r\n", st);
-    }
+    // get the gyro data
     st = gyro_read(&hspi1, &data);
+    //check the gyro read status
     if (st != HAL_OK) {
       die("barometer read failed: %d\r\n", st);
     }
-    SedsResult r;
+
+    // ===================logging=================
+    // log barometer data
     r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA, barometer_pressure,
                                    sizeof(barometer_pressure) /
                                        sizeof(barometer_pressure[0]),
@@ -147,14 +157,18 @@ int main(void) {
     if (r != SEDS_OK) {
       die("something went really wrong when logging the data %d\n", r);
     }
-    float gyro_vals[3] = {data.rate_x, data.rate_y, data.rate_z};
-    r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA, gyro_vals,
-                                   sizeof(gyro_vals) / sizeof(gyro_vals[0]),
-                                   sizeof(gyro_vals[0]));
 
+    // log gyro data 
+    //TODO: Integrate the gyro data with the telemetry library.
+    printf("Gyro data: X=%d, Y=%d, Z=%d\r\n", data.rate_x, data.rate_y, data.rate_z);
+
+
+    //====================process queues=================
     if (process_all_queues_timeout(20) != SEDS_OK) {
       die("something went really wrong when processing the queues\n");
     }
+
+    // sleep for 500ms
     HAL_Delay(500);
 
     /* USER CODE END WHILE */
