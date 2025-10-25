@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32g4xx_hal.h"
+#include "stm32g4xx_hal_def.h"
 #include "usb_device.h"
 
 #include "barometer.h"
@@ -115,16 +116,25 @@ int main(void) {
   // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
-    get_temperature_pressure_altitude_non_blocking(
+    HAL_StatusTypeDef st = get_temperature_pressure_altitude_non_blocking(
         &hspi1, &barometer_pressure[1], &barometer_pressure[0],
         &barometer_pressure[2]);
 
-    log_telemetry_asynchronous(SEDS_DT_BAROMETER, barometer_pressure,
-                               sizeof(barometer_pressure) /
-                                   sizeof(barometer_pressure[0]),
-                               sizeof(barometer_pressure[0]));
+    if (st != HAL_OK) {
+      die("barometer read failed: %d\r\n", st);
+    }
+    SedsResult r;
+    r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA, barometer_pressure,
+                                   sizeof(barometer_pressure) /
+                                       sizeof(barometer_pressure[0]),
+                                   sizeof(barometer_pressure[0]));
+    if (r != SEDS_OK) {
+      die("something went really wrong when logging the data %d\n", r);
+    }
 
-    process_all_queues_timeout(20);
+    if (process_all_queues_timeout(20) != SEDS_OK) {
+      die("something went really wrong when processing the queues\n");
+    }
     HAL_Delay(5);
 
     /* USER CODE END WHILE */
