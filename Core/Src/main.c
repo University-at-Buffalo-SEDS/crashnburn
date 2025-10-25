@@ -103,17 +103,15 @@ int main(void) {
   MX_SPI1_Init();
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
-    if (init_telemetry_router() != SEDS_OK) {
+  if (init_telemetry_router() != SEDS_OK) {
     die("telemetry router init failed\r\n");
   }
 
-
-if (gyro_init(&hspi1)!= HAL_OK) {
+  if (gyro_init(&hspi1) != HAL_OK) {
     die("gyro init failed\r\n");
   }
 
   // setup the local endpoints
-
 
   if (init_barometer(&hspi1) != HAL_OK) {
 
@@ -137,6 +135,10 @@ if (gyro_init(&hspi1)!= HAL_OK) {
     if (st != HAL_OK) {
       die("barometer read failed: %d\r\n", st);
     }
+    st = gyro_read(&hspi1, &data);
+    if (st != HAL_OK) {
+      die("barometer read failed: %d\r\n", st);
+    }
     SedsResult r;
     r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA, barometer_pressure,
                                    sizeof(barometer_pressure) /
@@ -145,16 +147,18 @@ if (gyro_init(&hspi1)!= HAL_OK) {
     if (r != SEDS_OK) {
       die("something went really wrong when logging the data %d\n", r);
     }
+    float gyro_vals[3] = {data.rate_x, data.rate_y, data.rate_z};
+    r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA, gyro_vals,
+                                   sizeof(gyro_vals) / sizeof(gyro_vals[0]),
+                                   sizeof(gyro_vals[0]));
 
     if (process_all_queues_timeout(20) != SEDS_OK) {
       die("something went really wrong when processing the queues\n");
     }
-    HAL_Delay(5);
+    HAL_Delay(500);
 
     /* USER CODE END WHILE */
-    gyro_read(&hspi1, &data);
-    printf("Gyro X: %d, Gyro Y: %d, Gyro Z: %d\n", data.rate_x, data.rate_y,
-           data.rate_z);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
