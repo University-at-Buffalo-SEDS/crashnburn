@@ -64,7 +64,7 @@ pub fn as_str(self) -> &'static str {
 match self {
 DataType::TelemetryError => "TELEMETRY_ERROR",
 DataType::GpsData => "GPS_DATA",
-DataType::GyroscopeData => "Gyroscope_Data",
+DataType::GyroscopeData => "GYROSCOPE_DATA",
 DataType::AccelerometerData => "ACCELEROMETER_DATA",
 DataType::BatteryStatus => "BATTERY_STATUS",
 DataType::SystemStatus => "SYSTEM_STATUS",
