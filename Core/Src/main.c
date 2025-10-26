@@ -103,47 +103,44 @@ int main(void) {
   MX_SPI1_Init();
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
-  if (init_telemetry_router() != SEDS_OK) {
-    die("telemetry router init failed\r\n");
+  SedsResult r = init_telemetry_router();
+  if (r != SEDS_OK) {
+    print_telemetry_error(r);
   }
 
   if (gyro_init(&hspi1) != HAL_OK) {
     die("gyro init failed\r\n");
   }
-
-  // setup the local endpoints
-
   if (init_barometer(&hspi1) != HAL_OK) {
 
     die("barometer init failed\r\n");
   }
+  /* USER CODE BEGIN 2 */
 
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
 
-  /* USER CODE BEGIN 2 */
   gyro_data_t data;
+  HAL_StatusTypeDef st;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
-    //Statuses
-    HAL_StatusTypeDef st;
-    SedsResult r;
-
-    // get the barometer data
+    // Statuses
+    //  get the barometer data
     st = get_temperature_pressure_altitude_non_blocking(
         &hspi1, &barometer_pressure[1], &barometer_pressure[0],
         &barometer_pressure[2]);
-      //check the barometer read status
+    // check the barometer read status
     if (st != HAL_OK) {
       die("barometer read failed: %d\r\n", st);
     }
 
     // get the gyro data
     st = gyro_read(&hspi1, &data);
-    //check the gyro read status
+    // check the gyro read status
     if (st != HAL_OK) {
       die("barometer read failed: %d\r\n", st);
     }
@@ -155,17 +152,17 @@ int main(void) {
                                        sizeof(barometer_pressure[0]),
                                    sizeof(barometer_pressure[0]));
     if (r != SEDS_OK) {
-      die("something went really wrong when logging the barometer data %d\n", r);
+      print_telemetry_error(r);
     }
 
-    // log gyro data 
-    //TODO: Integrate the gyro data with the telemetry library.
-    printf("Gyro data: X=%d, Y=%d, Z=%d\r\n", data.rate_x, data.rate_y, data.rate_z);
-
+    // log gyro data
+    // TODO: Integrate the gyro data with the telemetry library.
+    printf("Gyro data: X=%d, Y=%d, Z=%d\r\n", data.rate_x, data.rate_y,
+           data.rate_z);
 
     //====================process queues=================
     if (process_all_queues_timeout(20) != SEDS_OK) {
-      die("something went really wrong when processing the queues\n");
+      print_telemetry_error(r);
     }
 
     // sleep for 500ms
