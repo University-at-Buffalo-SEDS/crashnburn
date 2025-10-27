@@ -1,6 +1,7 @@
 #include "gyro.h"
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 static inline void gyro_cs_low(void)  { HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_RESET); }
 static inline void gyro_cs_high(void) { HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_SET);   }
@@ -65,7 +66,7 @@ HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi)
     HAL_Delay(30);
 
     /* Range & bandwidth (examples) */
-    st = gyro_write_register(hspi, GYRO_RANGE,     GYRO_RANGE_2000DPS);
+    st = gyro_write_register(hspi, GYRO_RANGE,     GYRO_RANGE_DPS);
     if (st != HAL_OK) return st;
     st = gyro_write_register(hspi, GYRO_BANDWIDTH, GYRO_BW_523HZ_ODR_2000HZ);
     if (st != HAL_OK) return st;
@@ -84,4 +85,32 @@ HAL_StatusTypeDef gyro_read(SPI_HandleTypeDef *hspi, gyro_data_t *g)
     g->rate_y = (int16_t)((uint16_t)buf[3] << 8 | buf[2]);
     g->rate_z = (int16_t)((uint16_t)buf[5] << 8 | buf[4]);
     return HAL_OK;
+}
+
+/* Get sensitivity (LSB per °/s) for given range */
+static float gyro_sensitivity_lsb_per_dps(GyroRange range)
+{
+    switch (range) {
+    case GYRO_RANGE_125DPS:  return 262.144f;
+    case GYRO_RANGE_250DPS:  return 131.072f;
+    case GYRO_RANGE_500DPS:  return 65.536f;
+    case GYRO_RANGE_1000DPS: return 32.768f;
+    case GYRO_RANGE_2000DPS: return 16.384f;
+    default:                 return 16.384f; // safe fallback
+    }
+}
+
+/* Convert one raw axis reading to degrees per second */
+float gyro_raw_to_dps(int16_t raw)
+{
+    return (float)raw / gyro_sensitivity_lsb_per_dps(GYRO_RANGE_DPS);
+}
+
+/* Convert full struct to degrees per second */
+void gyro_convert_to_dps(const gyro_data_t *raw, float *x_dps, float *y_dps, float *z_dps)
+{
+    if (!raw) return;
+    if (x_dps) *x_dps = gyro_raw_to_dps(raw->rate_x);
+    if (y_dps) *y_dps = gyro_raw_to_dps(raw->rate_y);
+    if (z_dps) *z_dps = gyro_raw_to_dps(raw->rate_z);
 }

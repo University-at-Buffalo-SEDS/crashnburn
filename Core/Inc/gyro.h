@@ -1,6 +1,7 @@
 #pragma once
 #include "stm32g4xx_hal.h"
 
+
 /* --- BMI088 Gyro Register Addresses (datasheet) --- */
 #define GYRO_CHIP_ID 0x00 // expect 0x0F
 #define GYRO_RATE_X_LSB 0x02
@@ -18,6 +19,7 @@
 #define GYRO_FIFO_CONFIG_0 0x3D
 #define GYRO_FIFO_CONFIG_1 0x3E
 #define GYRO_FIFO_DATA 0x3F
+#define GYRO_RANGE_DPS GYRO_RANGE_2000DPS
 
 #define gyro_CS_GPIO_Port GPIOB
 #define gyro_CS_Pin GPIO_PIN_12
@@ -61,3 +63,7 @@ HAL_StatusTypeDef gyro_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg,
                                    uint8_t *dst, uint16_t len);
 HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi);
 HAL_StatusTypeDef gyro_read(SPI_HandleTypeDef *hspi, gyro_data_t *gyro_data);
+
+float gyro_raw_to_dps(int16_t raw);
+void  gyro_convert_to_dps(const gyro_data_t *raw, float *x_dps, float *y_dps, float *z_dps);
+

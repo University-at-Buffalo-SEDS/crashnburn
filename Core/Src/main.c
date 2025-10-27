@@ -157,9 +157,9 @@ int main(void) {
 
     // log gyro data
     // TODO: Integrate the gyro data with the telemetry library.
-    printf("Gyro data: X=%d, Y=%d, Z=%d\r\n", data.rate_x, data.rate_y,
-           data.rate_z);
-
+    printf("Gyro data: X=%.2f, Y=%.2f, Z=%.2f\r\n", gyro_raw_to_dps( data.rate_x), gyro_raw_to_dps(data.rate_y),
+           gyro_raw_to_dps(data.rate_z));
+    
     //====================process queues=================
     if (process_all_queues_timeout(20) != SEDS_OK) {
       print_telemetry_error(r);
