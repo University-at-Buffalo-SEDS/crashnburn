@@ -6,6 +6,7 @@
 
 #ifdef __cplusplus
 extern "C" {
+
 #endif
 
 // ==============================
@@ -121,13 +122,28 @@ typedef SedsResult (*SedsTransmitFn)(const uint8_t *bytes, size_t len,
 typedef SedsResult (*SedsEndpointHandlerFn)(const SedsPacketView *pkt,
                                             void *user);
 
+
+/** @brief Serialized-bytes handler callback (raw wire bytes). */
+typedef SedsResult (* SedsSerializedHandlerFn)(const uint8_t * bytes,
+                                               size_t len,
+
+                                               void * user);
+
 /**
  * @brief Endpoint handler descriptor (used when constructing a router).
+ *
+ * You may set either or both callbacks:
+ *  - packet_handler: receives a structured SedsPacketView
+ *  - serialized_handler: receives the raw serialized bytes
+ *
+ * If both are set for the same endpoint, both will be invoked.
  */
-typedef struct SedsLocalEndpointDesc {
-  uint32_t endpoint;             /**< DataEndpoint as u32. */
-  SedsEndpointHandlerFn handler; /**< Callback function. */
-  void *user;                    /**< Opaque user context passed to callback. */
+typedef struct SedsLocalEndpointDesc
+{
+    uint32_t endpoint; /**< DataEndpoint as u32. */
+    SedsEndpointHandlerFn packet_handler; /**< Optional; may be NULL. */
+    SedsSerializedHandlerFn serialized_handler; /**< Optional; may be NULL. */
+    void * user; /**< Opaque user context. */
 } SedsLocalEndpointDesc;
 
 /**
@@ -300,6 +316,7 @@ SedsResult seds_router_log_queue_typed(SedsRouter *r, SedsDataType ty,
                                        const void *data, size_t count,
                                        size_t elem_size,
                                        SedsElemKind elem_kind);
+
 // ==============================
 // Convenience logging forms
 // ==============================
@@ -589,6 +606,45 @@ SedsResult seds_pkt_get_typed(const SedsPacketView *pkt, void *out,
                               size_t count, size_t elem_size,
                               SedsElemKind elem_kind);
 
+
+/**
+ * @brief Get required size in bytes to serialize @p view into the wire format.
+ * @return Required size in bytes, or negative SedsResult on error.
+ */
+int32_t seds_pkt_serialize_len(const SedsPacketView * view);
+
+/**
+ * @brief Serialize @p view into @p out.
+ * If @p out is NULL or @p out_len==0 or too small, returns required size (not success).
+ * @return Number of bytes written (or required), or negative SedsResult on error.
+ */
+int32_t seds_pkt_serialize(const SedsPacketView * view, uint8_t * out, size_t out_len);
+
+typedef struct SedsOwnedPacket SedsOwnedPacket;
+
+/** Deserialize bytes into an owned packet handle (NULL on failure). */
+SedsOwnedPacket * seds_pkt_deserialize_owned(const uint8_t * bytes, size_t len);
+
+/** Fill a view that borrows data from the owned packet (valid until free). */
+SedsResult seds_owned_pkt_view(const SedsOwnedPacket * pkt, SedsPacketView * out_view);
+
+/** Free an owned packet obtained from seds_pkt_deserialize_owned. */
+void seds_owned_pkt_free(SedsOwnedPacket * pkt);
+
+/** Optional: validate a serialized buffer without allocating. */
+SedsResult seds_pkt_validate_serialized(const uint8_t * bytes, size_t len);
+
+typedef struct SedsOwnedHeader SedsOwnedHeader;
+
+/** Parse only the header/envelope (type, endpoints, sender, timestamp), no payload. */
+SedsOwnedHeader * seds_pkt_deserialize_header_owned(const uint8_t * bytes, size_t len);
+
+/** Produce a SedsPacketView that borrows from the owned header (payload is NULL/0). */
+SedsResult seds_owned_header_view(const SedsOwnedHeader * h, SedsPacketView * out_view);
+
+/** Free an owned header created by seds_pkt_deserialize_header_owned. */
+void seds_owned_header_free(SedsOwnedHeader * h);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
@@ -598,8 +654,11 @@ SedsResult seds_pkt_get_typed(const SedsPacketView *pkt, void *out,
 // ============================================================================
 #if defined(__cplusplus)
 
-namespace seds_detail {
-template <typename T> struct elem_traits;
+namespace seds_detail
+{
+    template < typename
+    T >
+    struct elem_traits;
 
 template <> struct elem_traits<uint8_t> {
   static constexpr SedsElemKind kind = SEDS_EK_UNSIGNED;
