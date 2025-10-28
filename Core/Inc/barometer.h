@@ -2,6 +2,7 @@
 #include "stm32g4xx_hal.h"
 #include <math.h>
 #include <stdint.h>
+#include "main.h"
 
 // ==============================
 // BMP390 register map
@@ -65,8 +66,8 @@
 #define BMP390_SPI_TIMEOUT_MS 100u
 
 // GPIO (chip select)
-#define BAROMETER_GPIO_PIN GPIO_PIN_13
-#define BAROMETER_GPIO_PORT GPIOB
+#define BAROMETER_GPIO_PIN baro_CS_Pin
+#define BAROMETER_GPIO_PORT baro_CS_GPIO_Port
 
 #define BARO_CS_LOW()                                                          \
   HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_RESET)

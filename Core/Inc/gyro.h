@@ -1,6 +1,6 @@
 #pragma once
 #include "stm32g4xx_hal.h"
-
+#include "main.h"
 
 /* --- BMI088 Gyro Register Addresses (datasheet) --- */
 #define GYRO_CHIP_ID 0x00 // expect 0x0F
@@ -20,9 +20,6 @@
 #define GYRO_FIFO_CONFIG_1 0x3E
 #define GYRO_FIFO_DATA 0x3F
 #define GYRO_RANGE_DPS GYRO_RANGE_2000DPS
-
-#define gyro_CS_GPIO_Port GPIOB
-#define gyro_CS_Pin GPIO_PIN_12
 
 /* WHO_AM_I value (gyro die) */
 #define GYRO_CHIP_ID_VALUE 0x0F // BMI088 gyro WHOAMI
