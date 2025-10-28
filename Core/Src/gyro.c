@@ -11,7 +11,7 @@ HAL_StatusTypeDef gyro_write_register(SPI_HandleTypeDef *hspi, uint8_t reg, uint
 {
     uint8_t tx[2] = { GYRO_CMD_WRITE(reg), value };
     gyro_cs_low();
-    HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, tx, sizeof tx, HAL_MAX_DELAY);
+    HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, tx, sizeof(tx), HAL_MAX_DELAY);
     gyro_cs_high();
     return st;
 }
@@ -78,7 +78,7 @@ HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi)
 HAL_StatusTypeDef gyro_read(SPI_HandleTypeDef *hspi, gyro_data_t *g)
 {
     uint8_t buf[6];
-    HAL_StatusTypeDef st = gyro_read_buffer(hspi, GYRO_RATE_X_LSB, buf, sizeof buf);
+    HAL_StatusTypeDef st = gyro_read_buffer(hspi, GYRO_RATE_X_LSB, buf, sizeof(buf));
     if (st != HAL_OK) return st;
 
     g->rate_x = (int16_t)((uint16_t)buf[1] << 8 | buf[0]);
