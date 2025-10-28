@@ -2,55 +2,56 @@
 #include "stm32g4xx_hal.h"
 #include <math.h>
 #include <stdint.h>
+#include "main.h"
 
 // ==============================
 // BMP390 register map
 // ==============================
-#define CHIP_ID 0x00
-#define REV_ID 0x01
-#define ERR_REG 0x02
-#define STATUS 0x03
-#define DATA_0 0x04
-#define DATA_1 0x05
-#define DATA_2 0x06
-#define DATA_3 0x07
-#define DATA_4 0x08
-#define DATA_5 0x09
-#define SENSORTIME_0 0x0C
-#define SENSORTIME_1 0x0D
-#define SENSORTIME_2 0x0E
-#define EVENT 0x10
-#define INT_STATUS 0x11
-#define FIFO_LENGTH_0 0x12
-#define FIFO_LENGTH_1 0x13
-#define FIFO_DATA 0x14
-#define FIFO_WTM_0 0x15
-#define FIFO_WTM_1 0x16
-#define FIFO_CONFIG_0 0x17
-#define FIFO_CONFIG_1 0x18
-#define INT_CTRL 0x19
-#define IF_CONF 0x1A
-#define PWR_CTRL 0x1B
-#define OSR 0x1C
-#define ODR 0x1D
-#define CONFIG 0x1F
-#define CMD 0x7E
+#define BARO_CHIP_ID 0x00
+#define BARO_REV_ID 0x01
+#define BARO_ERR_REG 0x02
+#define BARO_STATUS 0x03
+#define BARO_DATA_0 0x04
+#define BARO_DATA_1 0x05
+#define BARO_DATA_2 0x06
+#define BARO_DATA_3 0x07
+#define BARO_DATA_4 0x08
+#define BARO_DATA_5 0x09
+#define BARO_SENSORTIME_0 0x0C
+#define BARO_SENSORTIME_1 0x0D
+#define BARO_SENSORTIME_2 0x0E
+#define BARO_EVENT 0x10
+#define BARO_INT_STATUS 0x11
+#define BARO_FIFO_LENGTH_0 0x12
+#define BARO_FIFO_LENGTH_1 0x13
+#define BARO_FIFO_DATA 0x14
+#define BARO_FIFO_WTM_0 0x15
+#define BARO_FIFO_WTM_1 0x16
+#define BARO_FIFO_CONFIG_0 0x17
+#define BARO_FIFO_CONFIG_1 0x18
+#define BARO_INT_CTRL 0x19
+#define BARO_IF_CONF 0x1A
+#define BARO_PWR_CTRL 0x1B
+#define BARO_OSR 0x1C
+#define BARO_ODR 0x1D
+#define BARO_CONFIG 0x1F
+#define BARO_CMD 0x7E
 
 // Trim (NVM) parameters (0x31..0x45)
-#define NVM_PAR_T1 0x31
-#define NVM_PAR_T2 0x33
-#define NVM_PAR_T3 0x35
-#define NVM_PAR_P1 0x36
-#define NVM_PAR_P2 0x38
-#define NVM_PAR_P3 0x3A
-#define NVM_PAR_P4 0x3B
-#define NVM_PAR_P5 0x3C
-#define NVM_PAR_P6 0x3E
-#define NVM_PAR_P7 0x40
-#define NVM_PAR_P8 0x41
-#define NVM_PAR_P9 0x42
-#define NVM_PAR_P10 0x44
-#define NVM_PAR_P11 0x45
+#define BARO_NVM_PAR_T1 0x31
+#define BARO_NVM_PAR_T2 0x33
+#define BARO_NVM_PAR_T3 0x35
+#define BARO_NVM_PAR_P1 0x36
+#define BARO_NVM_PAR_P2 0x38
+#define BARO_NVM_PAR_P3 0x3A
+#define BARO_NVM_PAR_P4 0x3B
+#define BARO_NVM_PAR_P5 0x3C
+#define BARO_NVM_PAR_P6 0x3E
+#define BARO_NVM_PAR_P7 0x40
+#define BARO_NVM_PAR_P8 0x41
+#define BARO_NVM_PAR_P9 0x42
+#define BARO_NVM_PAR_P10 0x44
+#define BARO_NVM_PAR_P11 0x45
 
 // ==============================
 // Chip constants & helpers
@@ -65,8 +66,8 @@
 #define BMP390_SPI_TIMEOUT_MS 100u
 
 // GPIO (chip select)
-#define BAROMETER_GPIO_PIN GPIO_PIN_13
-#define BAROMETER_GPIO_PORT GPIOB
+#define BAROMETER_GPIO_PIN baro_CS_Pin
+#define BAROMETER_GPIO_PORT baro_CS_GPIO_Port
 
 #define BARO_CS_LOW()                                                          \
   HAL_GPIO_WritePin(BAROMETER_GPIO_PORT, BAROMETER_GPIO_PIN, GPIO_PIN_RESET)

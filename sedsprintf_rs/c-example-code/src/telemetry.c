@@ -74,10 +74,10 @@ SedsResult on_radio_packet(const SedsPacketView * pkt, void * user)
     SedsResult s = seds_pkt_to_string(pkt, buf, sizeof(buf));
     if (s != SEDS_OK)
     {
-        printf("on_radio_packet: seds_pkt_to_string failed: {%d}\n", s);
+        printf("on_radio_packet: seds_pkt_to_string failed: %d\n", s);
         return s;
     }
-    printf("on_radio_packet: {%s}\n", buf);
+    printf("on_radio_packet: %s\n", buf);
     return SEDS_OK;
 }
 
@@ -90,7 +90,7 @@ SedsResult init_telemetry_router(void)
 
     // Local endpoint table
     const SedsLocalEndpointDesc locals[] = {
-        {.endpoint = SEDS_EP_RADIO, .handler = on_radio_packet, .user = NULL},
+        {.endpoint = SEDS_EP_RADIO, .packet_handler = on_radio_packet, .user = NULL},
     };
 
     SedsRouter * r = seds_router_new(
@@ -117,11 +117,12 @@ SedsResult init_telemetry_router(void)
 
 SedsResult log_telemetry_synchronous(
     SedsDataType data_type,
-    const void *data,
+    const void * data,
     size_t element_count,
     size_t element_size)
 {
-    if (!g_router.r) {
+    if (!g_router.r)
+    {
         if (init_telemetry_router() != SEDS_OK)
             return SEDS_ERR;
     }
@@ -157,11 +158,12 @@ SedsResult process_rx_queue(void)
 
 SedsResult log_telemetry_asynchronous(
     SedsDataType data_type,
-    const void *data,
+    const void * data,
     size_t element_count,
     size_t element_size)
 {
-    if (!g_router.r) {
+    if (!g_router.r)
+    {
         if (init_telemetry_router() != SEDS_OK)
             return SEDS_ERR;
     }
@@ -212,4 +214,18 @@ SedsResult process_all_queues_timeout(uint32_t timeout_ms)
         g_router.r,
         timeout_ms
     );
+}
+
+SedsResult print_handle_telemetry_error(const int32_t error_code)
+{
+    char buf[seds_error_to_string_len(error_code)];
+
+    SedsResult res = seds_error_to_string(error_code, buf, sizeof(buf));
+    if (res != SEDS_OK)
+    {
+        printf("handle_error: seds_error_to_string failed: %d\n", res);
+        return res;
+    }
+    printf("Error: %s\n", &*buf);
+    return SEDS_OK;
 }

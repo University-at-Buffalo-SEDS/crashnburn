@@ -26,7 +26,6 @@ else ()
 endif ()
 set(RUST_TRIPLE "${SEDSPRINTF_RS_TRIPLE}")
 
-# --- Pick shared-lib suffix
 # --- Derived paths
 set(RUST_PROFILE "$<IF:$<CONFIG:Debug>,debug,release>")
 set(RS_LIB_DBG "${RUST_DIR}/target/${RUST_TRIPLE}debug/libsedsprintf_rs.a")

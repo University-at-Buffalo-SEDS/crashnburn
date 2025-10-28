@@ -18,9 +18,16 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "gyro.h"
 #include "stm32g4xx_hal.h"
 #include "stm32g4xx_hal_def.h"
 #include "usb_device.h"
+#include "usbd_cdc_if.h"
+#include <inttypes.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 #include "barometer.h"
 #include "telemetry.h"
@@ -96,19 +103,24 @@ int main(void) {
   MX_SPI1_Init();
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
-
-  // setup the local endpoints
-
-  if (init_telemetry_router() != SEDS_OK) {
-    die("telemetry router init failed\r\n");
+  SedsResult r = init_telemetry_router();
+  if (r != SEDS_OK) {
+    print_telemetry_error(r);
   }
 
+  if (gyro_init(&hspi1) != HAL_OK) {
+    die("gyro init failed\r\n");
+  }
   if (init_barometer(&hspi1) != HAL_OK) {
 
     die("barometer init failed\r\n");
   }
+  /* USER CODE BEGIN 2 */
 
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
+
+  gyro_data_t data;
+  HAL_StatusTypeDef st;
 
   /* USER CODE END 2 */
 
@@ -116,26 +128,50 @@ int main(void) {
   // BARO_CS_HIGH();
   /* USER CODE BEGIN WHILE */
   while (1) {
-    HAL_StatusTypeDef st = get_temperature_pressure_altitude_non_blocking(
+    // Statuses
+    //  get the barometer data
+    st = get_temperature_pressure_altitude_non_blocking(
         &hspi1, &barometer_pressure[1], &barometer_pressure[0],
         &barometer_pressure[2]);
-
+    // check the barometer read status
     if (st != HAL_OK) {
       die("barometer read failed: %d\r\n", st);
     }
-    SedsResult r;
+
+    // get the gyro data
+    st = gyro_read(&hspi1, &data);
+    // check the gyro read status
+    if (st != HAL_OK) {
+      die("barometer read failed: %d\r\n", st);
+    }
+
+    // ===================logging=================
+    // log barometer data
     r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA, barometer_pressure,
                                    sizeof(barometer_pressure) /
                                        sizeof(barometer_pressure[0]),
                                    sizeof(barometer_pressure[0]));
     if (r != SEDS_OK) {
-      die("something went really wrong when logging the data %d\n", r);
+      print_telemetry_error(r);
     }
 
-    if (process_all_queues_timeout(20) != SEDS_OK) {
-      die("something went really wrong when processing the queues\n");
+    // log gyro data
+    float gyro_vals[3];
+    gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
+    r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA, gyro_vals, 
+                                    sizeof(gyro_vals)/sizeof(gyro_vals[0]), 
+                                        sizeof(gyro_vals[0]));
+    if (r != SEDS_OK) {
+      print_telemetry_error(r);
     }
-    HAL_Delay(5);
+    
+    //====================process queues=================
+    if (process_all_queues_timeout(20) != SEDS_OK) {
+      print_telemetry_error(r);
+    }
+
+    // sleep for 500ms
+    HAL_Delay(500);
 
     /* USER CODE END WHILE */
 

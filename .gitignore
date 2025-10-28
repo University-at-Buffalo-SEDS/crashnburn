@@ -3,7 +3,6 @@
 /.settings
 /.clangd
 /.cache
-.DS_Store
 CMakeCache.txt
 build.ninja
 compile_commands.json
@@ -13,3 +12,5 @@ Makefile
 cmake_install.cmake
 
 .idea/
+
+.DS_Store

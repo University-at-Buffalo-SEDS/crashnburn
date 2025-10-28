@@ -4,15 +4,27 @@
 
 int main(void)
 {
-    //syncronus code
+    //synchronous code
     init_telemetry_router();
     const float data[3] = {37.7749f, -122.4194f, 30.0f};
-    log_telemetry_synchronous(SEDS_DT_GPS, data, 3, sizeof(data[0]));
-    //asyncronus coder
+    SedsResult result = log_telemetry_synchronous(SEDS_DT_GPS, data, 3, sizeof(data[0]));
+    if (result != SEDS_OK)
+    {
+        print_handle_telemetry_error(result);
+    }
+    //asynchronous code
     //this would be in send routine of the data collector
-    log_telemetry_asynchronous(SEDS_DT_GPS, data, 3, sizeof(data[0]));
+    result = log_telemetry_asynchronous(SEDS_DT_GPS, data, 3, sizeof(data[0]));
+    if (result != SEDS_OK)
+    {
+        print_handle_telemetry_error(result);
+    }
     //this would be in the main loop of the program or in a freertos task.
-    process_all_queues_timeout(20);
+    result = process_all_queues_timeout(20);
+    if (result != SEDS_OK)
+    {
+        print_handle_telemetry_error(result);
+    }
     // dispatch_tx_queue_timeout(100);
 
     //this would be in the isr of the receiver

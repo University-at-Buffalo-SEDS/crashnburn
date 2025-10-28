@@ -64,7 +64,7 @@ HAL_StatusTypeDef baro_write_u8(SPI_HandleTypeDef *hspi, uint8_t reg,
 // ---- Trim/NVM read ----
 static HAL_StatusTypeDef read_trim_pars(SPI_HandleTypeDef *hspi) {
   uint8_t raw[21];
-  HAL_StatusTypeDef st = baro_read_reg(hspi, NVM_PAR_T1, raw, sizeof(raw));
+  HAL_StatusTypeDef st = baro_read_reg(hspi, BARO_NVM_PAR_T1, raw, sizeof(raw));
   if (st != HAL_OK)
     return st;
 
@@ -111,7 +111,7 @@ static HAL_StatusTypeDef read_trim_pars(SPI_HandleTypeDef *hspi) {
 static HAL_StatusTypeDef baro_wait_idle(SPI_HandleTypeDef *hspi) {
   for (int i = 0; i < 20; ++i) {
     uint8_t s = 0;
-    if (baro_read_u8(hspi, STATUS, &s) != HAL_OK)
+    if (baro_read_u8(hspi, BARO_STATUS, &s) != HAL_OK)
       return HAL_ERROR;
     HAL_Delay(2);
   }
@@ -122,12 +122,12 @@ static HAL_StatusTypeDef baro_wait_idle(SPI_HandleTypeDef *hspi) {
 static HAL_StatusTypeDef baro_try_enter_normal(SPI_HandleTypeDef *hspi) {
   uint8_t rb;
 
-  if (baro_write_u8(hspi, PWR_CTRL, (uint8_t)BMP390_PWR_NORMAL_WITH_SENSORS) !=
+  if (baro_write_u8(hspi, BARO_PWR_CTRL, (uint8_t)BMP390_PWR_NORMAL_WITH_SENSORS) !=
       HAL_OK)
     return HAL_ERROR;
   HAL_Delay(BMP390_MODE_SWITCH_DELAY_MS);
 
-  if (baro_read_u8(hspi, PWR_CTRL, &rb) != HAL_OK)
+  if (baro_read_u8(hspi, BARO_PWR_CTRL, &rb) != HAL_OK)
     return HAL_ERROR;
   if (((rb & BMP390_PWR_MODE_MASK) == BMP390_PWR_MODE_NORMAL) &&
       ((rb & BMP390_PWR_ENABLE_SENSORS) == BMP390_PWR_ENABLE_SENSORS))
@@ -135,14 +135,14 @@ static HAL_StatusTypeDef baro_try_enter_normal(SPI_HandleTypeDef *hspi) {
 
   // Retry from sleep
   (void)baro_wait_idle(hspi);
-  (void)baro_write_u8(hspi, PWR_CTRL, (uint8_t)0x00);
+  (void)baro_write_u8(hspi, BARO_PWR_CTRL, (uint8_t)0x00);
   HAL_Delay(BMP390_ENABLE_DELAY_MS);
-  (void)baro_write_u8(hspi, PWR_CTRL, (uint8_t)BMP390_PWR_ENABLE_SENSORS);
+  (void)baro_write_u8(hspi, BARO_PWR_CTRL, (uint8_t)BMP390_PWR_ENABLE_SENSORS);
   HAL_Delay(BMP390_ENABLE_DELAY_MS);
-  (void)baro_write_u8(hspi, PWR_CTRL, (uint8_t)BMP390_PWR_NORMAL_WITH_SENSORS);
+  (void)baro_write_u8(hspi, BARO_PWR_CTRL, (uint8_t)BMP390_PWR_NORMAL_WITH_SENSORS);
   HAL_Delay(BMP390_MODE_SWITCH_DELAY_MS);
 
-  if (baro_read_u8(hspi, PWR_CTRL, &rb) != HAL_OK)
+  if (baro_read_u8(hspi, BARO_PWR_CTRL, &rb) != HAL_OK)
     return HAL_ERROR;
   return (((rb & BMP390_PWR_MODE_MASK) == BMP390_PWR_MODE_NORMAL) &&
           ((rb & BMP390_PWR_ENABLE_SENSORS) == BMP390_PWR_ENABLE_SENSORS))
@@ -154,7 +154,7 @@ static HAL_StatusTypeDef baro_try_enter_normal(SPI_HandleTypeDef *hspi) {
 static HAL_StatusTypeDef baro_wait_drdy(SPI_HandleTypeDef *hspi,
                                         uint32_t extra_ms) {
   uint8_t odr_sel = 0;
-  if (baro_read_u8(hspi, ODR, &odr_sel) != HAL_OK)
+  if (baro_read_u8(hspi, BARO_ODR, &odr_sel) != HAL_OK)
     return HAL_ERROR;
   odr_sel &= BMP390_ODR_SEL_MASK;
 
@@ -166,7 +166,7 @@ static HAL_StatusTypeDef baro_wait_drdy(SPI_HandleTypeDef *hspi,
   uint32_t t0 = HAL_GetTick();
   for (;;) {
     uint8_t s = 0;
-    if (baro_read_u8(hspi, STATUS, &s) != HAL_OK)
+    if (baro_read_u8(hspi, BARO_STATUS, &s) != HAL_OK)
       return HAL_ERROR;
     if ((s & BMP390_STATUS_BOTH_DRDY) == BMP390_STATUS_BOTH_DRDY)
       return HAL_OK;
@@ -179,7 +179,7 @@ static HAL_StatusTypeDef baro_wait_drdy(SPI_HandleTypeDef *hspi,
 // Non-blocking: just peek STATUS
 static HAL_StatusTypeDef baro_check_drdy(SPI_HandleTypeDef *hspi) {
   uint8_t s = 0;
-  if (baro_read_u8(hspi, STATUS, &s) != HAL_OK)
+  if (baro_read_u8(hspi, BARO_STATUS, &s) != HAL_OK)
     return HAL_ERROR;
   return ((s & BMP390_STATUS_BOTH_DRDY) == BMP390_STATUS_BOTH_DRDY) ? HAL_OK
                                                                     : HAL_BUSY;
@@ -193,14 +193,14 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi) {
   // Reset
   {
     uint8_t cmd = BMP390_SOFTRESET_CMD;
-    st = baro_write_reg(hspi, CMD, &cmd, 1);
+    st = baro_write_reg(hspi, BARO_CMD, &cmd, 1);
     if (st != HAL_OK)
       die("baro: failed to issue soft reset\r\n");
     HAL_Delay(BMP390_RESET_DELAY_MS);
   }
 
   // Check ID
-  st = baro_read_u8(hspi, CHIP_ID, &v);
+  st = baro_read_u8(hspi, BARO_CHIP_ID, &v);
   if (st != HAL_OK)
     die("baro: failed to read CHIP_ID\r\n");
   if (v != BMP390_CHIP_ID_VALUE)
@@ -208,29 +208,29 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi) {
 
   // Force 4-wire
   v = 0x00;
-  (void)baro_write_reg(hspi, IF_CONF, &v, 1);
+  (void)baro_write_reg(hspi, BARO_IF_CONF, &v, 1);
   HAL_Delay(BMP390_ENABLE_DELAY_MS);
 
   // Enable sensors in SLEEP, then NORMAL
-  (void)baro_write_u8(hspi, PWR_CTRL, 0x00); // sleep
+  (void)baro_write_u8(hspi, BARO_PWR_CTRL, 0x00); // sleep
   HAL_Delay(BMP390_ENABLE_DELAY_MS);
-  if (baro_write_u8(hspi, PWR_CTRL, BMP390_PWR_ENABLE_SENSORS) != HAL_OK)
+  if (baro_write_u8(hspi, BARO_PWR_CTRL, BMP390_PWR_ENABLE_SENSORS) != HAL_OK)
     die("baro: enable sensors failed\r\n");
   HAL_Delay(BMP390_ENABLE_DELAY_MS);
 
   // OSR/ODR
-  if (baro_write_u8(hspi, OSR, BMP390_DEFAULT_OSR) != HAL_OK)
+  if (baro_write_u8(hspi, BARO_OSR, BMP390_DEFAULT_OSR) != HAL_OK)
     die("baro: write OSR failed\r\n"); // Tx1, Px2
-  if (baro_write_u8(hspi, ODR, BMP390_DEFAULT_ODR_SEL) != HAL_OK)
+  if (baro_write_u8(hspi, BARO_ODR, BMP390_DEFAULT_ODR_SEL) != HAL_OK)
     die("baro: write ODR failed\r\n"); // 12.5Hz
   HAL_Delay(BMP390_ENABLE_DELAY_MS);
 
   // NORMAL
   if (baro_try_enter_normal(hspi) != HAL_OK) {
     uint8_t pwr = 0, status = 0, err = 0;
-    (void)baro_read_u8(hspi, PWR_CTRL, &pwr);
-    (void)baro_read_u8(hspi, STATUS, &status);
-    (void)baro_read_u8(hspi, ERR_REG, &err);
+    (void)baro_read_u8(hspi, BARO_PWR_CTRL, &pwr);
+    (void)baro_read_u8(hspi, BARO_STATUS, &status);
+    (void)baro_read_u8(hspi, BARO_ERR_REG, &err);
     die("baro: NORMAL failed, PWR_CTRL=0x%02X STATUS=0x%02X ERR=0x%02X\r\n",
         pwr, status, err);
   }
@@ -241,7 +241,7 @@ HAL_StatusTypeDef init_barometer(SPI_HandleTypeDef *hspi) {
 
   // Let measurements settle (~2 frames)
   uint8_t odr_sel = 0;
-  (void)baro_read_u8(hspi, ODR, &odr_sel);
+  (void)baro_read_u8(hspi, BARO_ODR, &odr_sel);
   uint32_t period_ms = BMP390_PERIOD_MS_FROM_ODRSEL(odr_sel);
   HAL_Delay(2u * period_ms);
 
@@ -323,7 +323,7 @@ HAL_StatusTypeDef get_temperature(SPI_HandleTypeDef *hspi,
   uint8_t tbuf[3];
   if (baro_wait_drdy(hspi, 5) != HAL_OK)
     return HAL_TIMEOUT;
-  HAL_StatusTypeDef st = baro_read_reg(hspi, DATA_3, tbuf, sizeof(tbuf));
+  HAL_StatusTypeDef st = baro_read_reg(hspi, BARO_DATA_3, tbuf, sizeof(tbuf));
   if (st != HAL_OK)
     return st;
 
@@ -341,7 +341,7 @@ HAL_StatusTypeDef get_temperature_pressure(SPI_HandleTypeDef *hspi,
   if (baro_wait_drdy(hspi, 5) != HAL_OK)
     return HAL_TIMEOUT;
 
-  HAL_StatusTypeDef st = baro_read_reg(hspi, DATA_0, buf, sizeof(buf));
+  HAL_StatusTypeDef st = baro_read_reg(hspi, BARO_DATA_0, buf, sizeof(buf));
   if (st != HAL_OK)
     return st;
 
@@ -462,7 +462,7 @@ HAL_StatusTypeDef get_temperature_pressure_non_blocking(SPI_HandleTypeDef *hspi,
   }
 
   uint8_t buf[6];
-  HAL_StatusTypeDef st = baro_read_reg(hspi, DATA_0, buf, sizeof(buf));
+  HAL_StatusTypeDef st = baro_read_reg(hspi, BARO_DATA_0, buf, sizeof(buf));
   if (st != HAL_OK)
     return st;
 
@@ -495,7 +495,7 @@ HAL_StatusTypeDef get_temperature_pressure_altitude_non_blocking(
   }
 
   uint8_t buf[6];
-  HAL_StatusTypeDef st = baro_read_reg(hspi, DATA_0, buf, sizeof(buf));
+  HAL_StatusTypeDef st = baro_read_reg(hspi, BARO_DATA_0, buf, sizeof(buf));
   if (st != HAL_OK)
     return st;
 
@@ -531,7 +531,7 @@ HAL_StatusTypeDef get_temperature_non_blocking(SPI_HandleTypeDef *hspi, float *t
   }
 
   uint8_t buf[3];
-  HAL_StatusTypeDef st = baro_read_reg(hspi, DATA_3, buf, sizeof(buf));
+  HAL_StatusTypeDef st = baro_read_reg(hspi, BARO_DATA_3, buf, sizeof(buf));
   if (st != HAL_OK)
     return st;
 

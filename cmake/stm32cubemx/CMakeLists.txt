@@ -29,6 +29,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../USB_Device/App/usbd_desc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../USB_Device/App/usbd_cdc_if.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/gyro.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/telemetry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos_alloc_shim.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/barometer.c
@@ -97,6 +98,11 @@ target_link_libraries(USB_Device_Library PUBLIC stm32cubemx)
 
 # Add STM32CubeMX generated application sources to the project
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${MX_Application_Src})
+
+# Add sources to executable 
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE 
+    # Add user sources here (use full path relative to this CMake file)
+)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE ${MX_LINK_DIRS})
