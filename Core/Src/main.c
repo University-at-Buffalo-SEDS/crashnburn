@@ -156,6 +156,15 @@ int main(void) {
     }
 
     // log gyro data
+    float gyro_vals[3];
+    gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
+    r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA, gyro_vals, 
+                                    sizeof(gyro_vals)/sizeof(gyro_vals[0]), 
+                                        sizeof(gyro_vals[0]));
+    if (r != SEDS_OK) {
+      print_telemetry_error(r);
+    }
+
     // TODO: Integrate the gyro data with the telemetry library.
     printf("Gyro data: X=%.2f, Y=%.2f, Z=%.2f\r\n", gyro_raw_to_dps( data.rate_x), gyro_raw_to_dps(data.rate_y),
            gyro_raw_to_dps(data.rate_z));
