@@ -65,6 +65,14 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf_rs)
 target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf_rs)
 
+add_library(freertos_config INTERFACE )
+set(FREERTOS_PORT GCC_ARM_CM4F CACHE STRING "")
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/FreeRTOS-Kernel)
+
+target_link_libraries(${CMAKE_PROJECT_NAME} FreeRTOS)
+
+
 
 # add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf)
 # target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf)
