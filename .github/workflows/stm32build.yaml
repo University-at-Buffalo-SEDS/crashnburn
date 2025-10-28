@@ -88,21 +88,17 @@ jobs:
       # ---------- Install CubeCLT only if not already there ----------
       - name: Install STM32CubeCLT (skip if restored)
         run: |
-          if compgen -G "/opt/st/stm32cubeclt_${CUBE_VER}*/bin/arm-none-eabi-gcc" > /dev/null; then
+          if sudo find /opt/st -type f -name arm-none-eabi-gcc -print -quit | grep -q .; then
             echo "CubeCLT already present, skipping installer."
             exit 0
           fi
-
+      
           export DEBIAN_FRONTEND=noninteractive
           chmod +x "${CUBE_CACHE_DIR}/${CUBE_FILE}"
-
-          export LC_ALL=C
-          export PAGER=cat
-          export LESS='-F -X -R'
-          export MORE='-f'
-          export TERM=xterm
-          stty rows 200 columns 200 || true
-
+      
+          export LC_ALL=C PAGER=cat LESS='-F -X -R' MORE='-f' TERM=xterm
+          stty rows 200 columns 200 2>/dev/null || true
+      
           expect <<'EOF'
           set timeout 600
           spawn sudo -E ${env(CUBE_CACHE_DIR)}/${env(CUBE_FILE)} --nox11 -- -y
@@ -117,26 +113,27 @@ jobs:
             eof
           }
           EOF
-
-      # ---------- Pack installed /opt for next runs (idempotent) ----------
-      - name: Pack /opt/st for caching (zstd)
+      
+      - name: Expose toolchain on PATH (now + later)
         run: |
-          if [ -d "/opt/st/stm32cubeclt_${CUBE_VER}" ]; then
-            echo "Packing /opt/st for cache…"
-            sudo tar --zstd -cf "${CUBE_TAR}" -C / opt/st
-            ls -lh "${CUBE_TAR}"
-          else
-            echo "Nothing to pack; /opt/st/stm32cubeclt_${CUBE_VER} not found."
-          fi
-
-      # ---------- Expose toolchain on PATH ----------
+          BIN_DIRS=$(sudo find /opt/st -maxdepth 5 -type d -path "/opt/st/stm32cubeclt_*/*/bin" -o -path "/opt/st/stm32cubeclt_*/bin" 2>/dev/null)
+          for d in $BIN_DIRS; do export PATH="$d:$PATH"; done
+          for d in $BIN_DIRS; do echo "$d"; done | sudo tee -a "$GITHUB_PATH" >/dev/null
+      
       - name: Verify toolchain
         run: |
-          for d in /opt/st/stm32cubeclt_${CUBE_VER}/*/bin; do
-            echo "$d" >> "$GITHUB_PATH"
-          done
+          echo "Discovered CubeCLT bin dirs:"
+          printf '%s\n' $BIN_DIRS || true
+      
           which cmake || true
           cmake --version || true
+      
+          if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then
+            echo "arm-none-eabi-gcc not on PATH; scanning filesystem..."
+            sudo find /opt/st -maxdepth 6 -name arm-none-eabi-gcc -print
+            exit 1
+          fi
+      
           which arm-none-eabi-gcc
           arm-none-eabi-gcc --version
 
