@@ -1,12 +1,3 @@
-name: Build and Release STM32 (cube-cmake)
-
-on:
-  push:
-    branches: [main]
-    tags:
-      - 'v*.*.*'     # tag like v1.2.3 to trigger a Release
-  pull_request:
-
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -15,6 +6,12 @@ jobs:
     env:
       BUILD_TYPE: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || 'debug' }}
       BUILD_DIR: ${{ startsWith(github.ref, 'refs/tags/v') && 'build/Release' || 'build/Debug' }}
+      CUBE_VER: "1.19.0"
+      CUBE_BUILD: "25876_20250729_1159"
+      CUBE_FILE: "st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh"
+      CUBE_URL: "https://files.rylanswebsite.com/publicdocuments/files/UBSEDS/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh"
+      CUBE_CACHE_DIR: ".cache/cubeclt"
+      CUBE_TAR: ".cache/cubeclt/opt-stm32cubeclt.tar.zst"
 
     steps:
       - name: Checkout
@@ -22,129 +19,132 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup the environment (install dependencies and grab the STM32CUBECLT installer)
+      # ---------- Restore caches (installer + full install + ccache + Rust) ----------
+      - name: Restore STM32CubeCLT caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/cubeclt
+          key: cubeclt-${{ env.CUBE_VER }}-${{ env.CUBE_BUILD }}
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake', '**/*.c', '**/*.cpp', '**/*.h', '**/*.hpp') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Restore Rust caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      # ---------- System deps (still needed, but quick) ----------
+      - name: Setup the environment (install deps)
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg expect git-lfs
-          sudo apt-get remove -y cmake
+          sudo apt-get install -y dpkg expect git-lfs zstd ccache
+          sudo apt-get remove -y cmake || true
           rustup target add thumbv7em-none-eabihf
-          # git-lfs pull
-          wget -O CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh "https://files.rylanswebsite.com/publicdocuments/files/UBSEDS/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh"
-          git submodule update --init --recursive
-          # Move/ensure the installer is at repo root (adjust if it's already there)
-          if [ -f "CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh" ]; then
-            mv CI_CD_files/st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh .
-          fi
-          ls -l st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
 
-      - name: Install STM32CubeCLT (The embedded toolchain for the stm32 microcontroller)
+      # ---------- Get installer (from cache or download once) ----------
+      - name: Ensure CubeCLT installer present (cached or download)
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          chmod +x st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh
+          mkdir -p "${CUBE_CACHE_DIR}"
+          if [ ! -f "${CUBE_CACHE_DIR}/${CUBE_FILE}" ]; then
+            echo "Installer not cached, downloading…"
+            wget -O "${CUBE_CACHE_DIR}/${CUBE_FILE}" "${CUBE_URL}"
+          else
+            echo "Using cached installer ${CUBE_CACHE_DIR}/${CUBE_FILE}"
+          fi
+          ls -l "${CUBE_CACHE_DIR}/${CUBE_FILE}"
 
-          # --- Anti-paging & deterministic TTY env for the installer ---
-          # Many TUI installers page the license via $PAGER; force "cat" to avoid it.
+      # ---------- Restore full /opt install if cached ----------
+      - name: Restore installed CubeCLT to /opt (if cached)
+        run: |
+          if [ -f "${CUBE_TAR}" ]; then
+            echo "Restoring cached /opt/st from ${CUBE_TAR}"
+            sudo mkdir -p /opt/st
+            sudo tar --zstd -xf "${CUBE_TAR}" -C /
+          else
+            echo "No cached /opt install found."
+          fi
+
+      # ---------- Install CubeCLT only if not already there ----------
+      - name: Install STM32CubeCLT (skip if restored)
+        run: |
+          if compgen -G "/opt/st/stm32cubeclt_${CUBE_VER}*/bin/arm-none-eabi-gcc" > /dev/null; then
+            echo "CubeCLT already present, skipping installer."
+            exit 0
+          fi
+
+          export DEBIAN_FRONTEND=noninteractive
+          chmod +x "${CUBE_CACHE_DIR}/${CUBE_FILE}"
+
           export LC_ALL=C
           export PAGER=cat
           export LESS='-F -X -R'
           export MORE='-f'
           export TERM=xterm
-          # Big terminal so no pagination heuristics trigger
           stty rows 200 columns 200 || true
-      
-          # Run the interactive script with expect
+
           expect <<'EOF'
-          # Uncomment next line to debug matching:
-          # exp_internal 1
-      
-          # Be generous but finite; CI can be slow
           set timeout 600
-      
-          # Always keep English prompts
-          set ::env(LC_ALL) "C"
-          set ::env(PAGER)  "cat"
-          set ::env(LESS)   "-F -X -R"
-          set ::env(MORE)   "-f"
-          set ::env(TERM)   "xterm"
-      
-          # Start installer as root; --nox11 avoids GUI; trailing -- -y passes default "yes" to any dpkg prompts
-          spawn sudo -E ./st-stm32cubeclt_1.19.0_25876_20250729_1159_amd64.deb_bundle.sh --nox11 -- -y
-      
-          # Some installers still try to page; proactively send a few spaces/enters when we see long license blocks
-          proc press_space {} {
-            after 100
-            send -- " "
-          }
-          proc press_enter {} {
-            after 100
-            send -- "\r"
-          }
-      
-          # Main loop: advance through license/pager screens until we hit an explicit accept prompt,
-          # then send 'y' and keep going until eof.
+          spawn sudo -E ${env(CUBE_CACHE_DIR)}/${env(CUBE_FILE)} --nox11 -- -y
           expect {
-            # Typical paging markers
-            -re {--More--|Press (ENTER|Enter|Return) to continue|Press any key to continue} {
-              press_space
-              exp_continue
-            }
-      
-            # "I ACCEPT [N/y]" style prompt
-            -re {I ACCEPT.*\[N\/y\]} {
-              send -- "y\r"
-              exp_continue
-            }
-      
-            # Another common wording
-            -re {Please type y to accept.*} {
-              send -- "y\r"
-              exp_continue
-            }
-      
-            # Some variants show (y/N) or (Y/n)
-            -re {\((?:y/N|Y/n)\)} {
-              send -- "y\r"
-              exp_continue
-            }
-      
-            # Sometimes a plain "Do you accept" without brackets
-            -re {Do you accept.*\?} {
-              send -- "y\r"
-              exp_continue
-            }
-      
-            # Generic "Press Enter to continue"
-            -re {Press (Enter|RETURN) to continue} {
-              press_enter
-              exp_continue
-            }
-      
-            # After license acceptance, installers often ask to proceed
-            -re {Continue\? \[Y/n\]} {
-              send -- "y\r"
-              exp_continue
-            }
-      
-            # Installer finished
+            -re {--More--|Press (ENTER|Enter|Return) to continue|Press any key to continue} { send -- " "; exp_continue }
+            -re {I ACCEPT.*\[N\/y\]} { send -- "y\r"; exp_continue }
+            -re {Please type y to accept.*} { send -- "y\r"; exp_continue }
+            -re {\((?:y/N|Y/n)\)} { send -- "y\r"; exp_continue }
+            -re {Do you accept.*\?} { send -- "y\r"; exp_continue }
+            -re {Press (Enter|RETURN) to continue} { send -- "\r"; exp_continue }
+            -re {Continue\? \[Y/n\]} { send -- "y\r"; exp_continue }
             eof
           }
           EOF
-      
-          # Put CubeCLT tool binaries on PATH for later steps
-          for d in /opt/st/stm32cubeclt_1.19.0/*/bin; do
-            echo "$d" >> "$GITHUB_PATH"
-          done
-      
 
+      # ---------- Pack installed /opt for next runs (idempotent) ----------
+      - name: Pack /opt/st for caching (zstd)
+        run: |
+          if [ -d "/opt/st/stm32cubeclt_${CUBE_VER}" ]; then
+            echo "Packing /opt/st for cache…"
+            sudo tar --zstd -cf "${CUBE_TAR}" -C / opt/st
+            ls -lh "${CUBE_TAR}"
+          else
+            echo "Nothing to pack; /opt/st/stm32cubeclt_${CUBE_VER} not found."
+          fi
+
+      # ---------- Expose toolchain on PATH ----------
       - name: Verify toolchain
         run: |
-          which cmake
-          cmake --version
+          for d in /opt/st/stm32cubeclt_${CUBE_VER}/*/bin; do
+            echo "$d" >> "$GITHUB_PATH"
+          done
+          which cmake || true
+          cmake --version || true
           which arm-none-eabi-gcc
           arm-none-eabi-gcc --version
 
+      # ---------- (Optional) Enable ccache for your build scripts ----------
+      - name: Prime ccache wrappers (optional)
+        run: |
+          # If your build scripts honor CC/CXX or CMake uses CMAKE_C_COMPILER_LAUNCHER
+          echo "CC='ccache gcc'" >> $GITHUB_ENV
+          echo "CXX='ccache g++'" >> $GITHUB_ENV
+          ccache --zero-stats || true
+          ccache --show-config || true
+
       - name: Build (Build the project)
         run: ./build_"$BUILD_TYPE".sh
+
+      - name: Show ccache stats (optional)
+        run: ccache --show-stats || true
 
       - name: Package firmware (ELF → BIN/HEX/LST/SIZE)
         run: |
