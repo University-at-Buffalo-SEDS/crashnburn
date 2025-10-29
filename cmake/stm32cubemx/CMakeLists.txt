@@ -32,7 +32,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/gyro.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/telemetry.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos_alloc_shim.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos_support.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/barometer.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32g4xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32g4xx_hal_msp.c
