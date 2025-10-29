@@ -14,3 +14,4 @@ cmake_install.cmake
 .idea/
 
 .DS_Store
+target/rust-analyzer/flycheck0/
