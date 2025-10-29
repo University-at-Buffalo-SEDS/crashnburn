@@ -2,10 +2,8 @@
 #pragma once
 #include <stdint.h>
 
-/* Bring in the declaration of SystemCoreClock (or declare it yourself) */
+
 extern uint32_t SystemCoreClock;   // declare, do not include HAL
-/* If you don't want to include HAL here, use:
-   // extern uint32_t SystemCoreClock;
 */
 
 #define configCPU_CLOCK_HZ                    ( SystemCoreClock )   /* keep SystemCoreClock up to date */
