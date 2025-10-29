@@ -4,7 +4,7 @@
 
 
 extern uint32_t SystemCoreClock;   // declare, do not include HAL
-*/
+
 
 #define configCPU_CLOCK_HZ                    ( SystemCoreClock )   /* keep SystemCoreClock up to date */
 #define configTICK_RATE_HZ                    ( (TickType_t)1000 )
