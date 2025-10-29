@@ -28,16 +28,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-
 #include "barometer.h"
 #include "telemetry.h"
-#include "usbd_cdc_if.h"
-#include <inttypes.h>
-#include <sedsprintf.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
+#include "FreeRTOS.h"
+#include "task.h"
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -70,6 +65,17 @@ SPI_HandleTypeDef hspi1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
+
+static void SensorTask(void *arg);
+static void DispatchTask(void *arg);
+
+
+#define SENSOR_TASK_STACK     (512)
+#define DISPATCH_TASK_STACK   (384)
+
+/* Priorities: higher number = higher priority */
+#define SENSOR_TASK_PRIO      (tskIDLE_PRIORITY + 2)
+#define DISPATCH_TASK_PRIO    (tskIDLE_PRIORITY + 1)
 /* USER CODE BEGIN PFP */
 /**
  * @brief  The application entry point.
@@ -115,68 +121,21 @@ int main(void) {
 
     die("barometer init failed\r\n");
   }
-  /* USER CODE BEGIN 2 */
 
-  float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
-
-  gyro_data_t data;
-  HAL_StatusTypeDef st;
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  // BARO_CS_HIGH();
-  /* USER CODE BEGIN WHILE */
-  while (1) {
-    // Statuses
-    //  get the barometer data
-    st = get_temperature_pressure_altitude_non_blocking(
-        &hspi1, &barometer_pressure[1], &barometer_pressure[0],
-        &barometer_pressure[2]);
-    // check the barometer read status
-    if (st != HAL_OK) {
-      die("barometer read failed: %d\r\n", st);
-    }
-
-    // get the gyro data
-    st = gyro_read(&hspi1, &data);
-    // check the gyro read status
-    if (st != HAL_OK) {
-      die("barometer read failed: %d\r\n", st);
-    }
-
-    // ===================logging=================
-    // log barometer data
-    r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA, barometer_pressure,
-                                   sizeof(barometer_pressure) /
-                                       sizeof(barometer_pressure[0]),
-                                   sizeof(barometer_pressure[0]));
-    if (r != SEDS_OK) {
-      print_telemetry_error(r);
-    }
-
-    // log gyro data
-    float gyro_vals[3];
-    gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
-    r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA, gyro_vals, 
-                                    sizeof(gyro_vals)/sizeof(gyro_vals[0]), 
-                                        sizeof(gyro_vals[0]));
-    if (r != SEDS_OK) {
-      print_telemetry_error(r);
-    }
-    
-    //====================process queues=================
-    if (process_all_queues_timeout(20) != SEDS_OK) {
-      print_telemetry_error(r);
-    }
-
-    // sleep for 500ms
-    HAL_Delay(500);
-
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
+  // ---- Create tasks ----
+  BaseType_t ok = pdPASS;
+  ok &= xTaskCreate(SensorTask,   "sensor",   SENSOR_TASK_STACK,   NULL, SENSOR_TASK_PRIO,   NULL);
+  ok &= xTaskCreate(DispatchTask, "dispatch", DISPATCH_TASK_STACK, NULL, DISPATCH_TASK_PRIO, NULL);
+  if (ok != pdPASS) {
+    die("xTaskCreate failed\r\n");
   }
+
+  // ---- Go! ----
+  vTaskStartScheduler();
+
+  // If we ever get here, heap/port config is wrong
+  while(1) {}
+
   /* USER CODE END 3 */
 }
 
@@ -300,7 +259,67 @@ static void MX_GPIO_Init(void) {
 }
 
 /* USER CODE BEGIN 4 */
+static void SensorTask(void *arg) {
+  (void)arg;
 
+  float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
+  gyro_data_t data;
+
+  for (;;) {
+    // ---- Read barometer ----
+    HAL_StatusTypeDef st = get_temperature_pressure_altitude_non_blocking(
+        &hspi1, &barometer_pressure[1], &barometer_pressure[0], &barometer_pressure[2]);
+    if (st != HAL_OK) {
+      die("barometer read failed: %d\r\n", st);
+    }
+
+    // ---- Read gyro ----
+    st = gyro_read(&hspi1, &data);
+    if (st != HAL_OK) {
+      die("gyro read failed: %d\r\n", st);
+    }
+
+    // ---- Log telemetry (asynchronous) ----
+    SedsResult r;
+
+    r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA,
+                                   barometer_pressure,
+                                   (uint32_t)(sizeof(barometer_pressure) / sizeof(barometer_pressure[0])),
+                                   (uint32_t)sizeof(barometer_pressure[0]));
+    if (r != SEDS_OK) {
+      print_telemetry_error(r);
+    }
+
+    float gyro_vals[3];
+    gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
+    r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA,
+                                   gyro_vals,
+                                   (uint32_t)(sizeof(gyro_vals) / sizeof(gyro_vals[0])),
+                                   (uint32_t)sizeof(gyro_vals[0]));
+    if (r != SEDS_OK) {
+      print_telemetry_error(r);
+    }
+
+    // Sample period: 500 ms (use RTOS tick, not HAL_Delay)
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+}
+
+static void DispatchTask(void *arg) {
+  (void)arg;
+
+  for (;;) {
+    // Drain the router queues for a short bounded time slice
+    // (20 ms is from your original code)
+    SedsResult r = process_all_queues_timeout(20);
+    if (r != SEDS_OK) {
+      print_telemetry_error(r);
+    }
+
+    // Back off a bit to let other tasks run; tune as needed
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
+}
 /* USER CODE END 4 */
 
 /**
