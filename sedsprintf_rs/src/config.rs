@@ -75,19 +75,19 @@ pub const MESSAGE_ELEMENTS: [usize; DataType::COUNT] = [
 /// All message types with their metadata.
 pub const MESSAGE_TYPES: [MessageMeta; DataType::COUNT] = [
     MessageMeta {
-        data_size: get_needed_message_size(DataType::TelemetryError),
+        data_size: MessageSizeType::Static(get_needed_message_size(DataType::TelemetryError)),
         endpoints: &[DataEndpoint::Serial],
     },
     MessageMeta {
-        data_size: get_needed_message_size(DataType::GyroscopeData),
+        data_size: MessageSizeType::Static(get_needed_message_size(DataType::GyroscopeData)),
         endpoints: &[DataEndpoint::Serial],
     },
     MessageMeta {
-        data_size: get_needed_message_size(DataType::AccelerometerData),
+        data_size: MessageSizeType::Static(get_needed_message_size(DataType::AccelerometerData)),
         endpoints: &[DataEndpoint::Serial],
     },
     MessageMeta {
-        data_size: get_needed_message_size(DataType::BarometerData),
+        data_size: MessageSizeType::Static(get_needed_message_size(DataType::BarometerData)),
         endpoints: &[DataEndpoint::Serial],
     },
 ];
