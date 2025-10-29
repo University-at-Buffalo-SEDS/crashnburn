@@ -300,7 +300,7 @@ static void SensorTask(void *arg) {
       print_telemetry_error(r);
     }
 
-    // Sample period: 500 ms (use RTOS tick, not HAL_Delay)
+    // Sample period: 500 ms
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
@@ -309,8 +309,7 @@ static void DispatchTask(void *arg) {
   (void)arg;
 
   for (;;) {
-    // Drain the router queues for a short bounded time slice
-    // (20 ms is from your original code)
+    // Drain the router queues for 20ms
     SedsResult r = process_all_queues_timeout(20);
     if (r != SEDS_OK) {
       print_telemetry_error(r);
