@@ -71,8 +71,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf_rs)
 # Add linked libraries
 target_link_libraries(
     stm32cubemx
-
-    # Add user defined libraries
 )
 
 # ---- FreeRTOS config interface (provides FreeRTOSConfig.h include path) ----
@@ -86,16 +84,11 @@ set(FREERTOS_PORT GCC_ARM_CM4F CACHE STRING "")
 set(FREERTOS_HEAP 4             CACHE STRING "")  # heap_4.c
 add_subdirectory(${CMAKE_SOURCE_DIR}/FreeRTOS-Kernel)
 
-# Ensure anything linking freertos_kernel also sees FreeRTOSConfig.h
-# (This is a different target, so we can use keyword signature here safely.)
 target_link_libraries(freertos_kernel PUBLIC freertos_config)
-
-# Optional: make sure kernel builds with the right CPU/FPU flags
 target_compile_options(freertos_kernel PRIVATE
     -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 )
 
-# Link kernel into your firmware target (PLAIN signature to keep consistency)
 target_link_libraries(${CMAKE_PROJECT_NAME} freertos_kernel)
 
 # ---- CubeMX generated lib must link into crashnburn (PLAIN signature) ----
