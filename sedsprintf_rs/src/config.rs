@@ -1,11 +1,10 @@
 // src/config.rs
 use crate::{data_type_size, MessageDataType, MessageType};
 
-
 //----------------------User Editable----------------------
 pub const DEVICE_IDENTIFIER: &str = "CrashNBurn";
-pub const MAX_STRING_LENGTH: usize = 1024;
-pub const MAX_HEX_LENGTH: usize = 1024;
+pub const MAX_STATIC_STRING_LENGTH: usize = 1024;
+pub const MAX_STATIC_HEX_LENGTH: usize = 1024;
 
 pub const MAX_PRECISION_IN_STRINGS: usize = 8; // 12 is expensive; tune as needed
 
@@ -100,9 +99,16 @@ pub const STRING_VALUE_ELEMENTS: usize = 1;
 impl DataType {
     pub const COUNT: usize = (MAX_VALUE_DATA_TYPE + 1) as usize;
 }
-#[derive(Debug, Clone, Copy)]
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum MessageSizeType {
+    Static(usize),
+    Dynamic,
+
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct MessageMeta {
-    pub data_size: usize,
+    pub data_size: MessageSizeType,
     pub endpoints: &'static [DataEndpoint],
 }
 
