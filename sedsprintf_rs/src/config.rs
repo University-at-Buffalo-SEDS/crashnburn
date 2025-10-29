@@ -7,6 +7,8 @@ pub const DEVICE_IDENTIFIER: &str = "CrashNBurn";
 pub const MAX_STRING_LENGTH: usize = 1024;
 pub const MAX_HEX_LENGTH: usize = 1024;
 
+pub const MAX_PRECISION_IN_STRINGS: usize = 8; // 12 is expensive; tune as needed
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 #[repr(u32)]
 pub enum DataEndpoint {
@@ -16,7 +18,6 @@ pub enum DataEndpoint {
 pub const MAX_VALUE_DATA_ENDPOINT: u32 = DataEndpoint::Serial as u32;
 
 impl DataEndpoint {
-    #[inline]
     pub fn as_str(self) -> &'static str {
         match self {
             DataEndpoint::Serial => "Serial",
@@ -41,8 +42,7 @@ pub enum DataType {
 pub const MAX_VALUE_DATA_TYPE: u32 = DataType::BarometerData as u32;
 
 impl DataType {
-    #[inline]
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             DataType::TelemetryError => "TELEMETRY_ERROR",
             DataType::GyroscopeData => "GYROSCOPE_DATA",
