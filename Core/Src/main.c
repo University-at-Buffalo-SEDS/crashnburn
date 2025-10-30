@@ -109,6 +109,9 @@ int main(void) {
   MX_SPI1_Init();
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
+
+  // die("test death\r\n");
+
   SedsResult r = init_telemetry_router();
   if (r != SEDS_OK) {
     print_telemetry_error(r);
@@ -124,17 +127,21 @@ int main(void) {
 
   // ---- Create tasks ----
   BaseType_t ok = pdPASS;
+  printf("Creating tasks...\r\n");
   ok &= xTaskCreate(SensorTask,   "sensor",   SENSOR_TASK_STACK,   NULL, SENSOR_TASK_PRIO,   NULL);
   ok &= xTaskCreate(DispatchTask, "dispatch", DISPATCH_TASK_STACK, NULL, DISPATCH_TASK_PRIO, NULL);
   if (ok != pdPASS) {
     die("xTaskCreate failed\r\n");
   }
+  printf("Task Created\r\nStaring Scheduler\r\n");
 
   // ---- Go! ----
   vTaskStartScheduler();
 
   // If we ever get here, heap/port config is wrong
-  while(1) {}
+  while(1) {
+    printf("FATAL: vTaskStartScheduler returned!\r\n");
+  }
 
   /* USER CODE END 3 */
 }

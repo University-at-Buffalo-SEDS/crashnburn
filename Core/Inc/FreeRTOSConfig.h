@@ -17,7 +17,7 @@ extern uint32_t SystemCoreClock;   // declare, do not include HAL
 #define configUSE_PREEMPTION                  1
 #define configUSE_TIME_SLICING                1
 #define configMAX_PRIORITIES                  7
-#define configMINIMAL_STACK_SIZE              ( (uint16_t)256 )     /* words */
+#define configMINIMAL_STACK_SIZE              ( (uint16_t)512 )     /* words */
 #define configUSE_16_BIT_TICKS                0
 #define configIDLE_SHOULD_YIELD               1
 #define configUSE_NEWLIB_REENTRANT            0
