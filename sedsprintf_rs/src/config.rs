@@ -71,7 +71,7 @@ pub const MESSAGE_INFO_TYPES: [MessageType; DataType::COUNT] = [
 
 /// how many elements each message carries
 pub const MESSAGE_ELEMENTS: [usize; DataType::COUNT] = [
-    1,                     // elements int he Telemetry Error data
+    DYNAMIC_ELEMENT,       // elements int he Telemetry Error data
     3,                     // elements in the Gyroscope data (gyro x,y,z)
     3,                     // elements in the Accelerometer data (accel x,y,z)
     3,                     // elements in the Barometer data (pressure, temperature, altitude)
@@ -79,7 +79,7 @@ pub const MESSAGE_ELEMENTS: [usize; DataType::COUNT] = [
 /// All message types with their metadata.
 pub const MESSAGE_TYPES: [MessageMeta; DataType::COUNT] = [
     MessageMeta {
-        data_size: MessageSizeType::Static(get_needed_message_size(DataType::TelemetryError)),
+        data_size: MessageSizeType::Dynamic,
         endpoints: &[DataEndpoint::Serial],
     },
     MessageMeta {
