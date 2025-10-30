@@ -90,6 +90,3 @@ target_compile_options(freertos_kernel PRIVATE
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} freertos_kernel)
-
-# ---- CubeMX generated lib must link into crashnburn (PLAIN signature) ----
-target_link_libraries(${CMAKE_PROJECT_NAME} stm32cubemx)
