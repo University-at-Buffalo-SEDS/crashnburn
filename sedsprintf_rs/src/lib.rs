@@ -16,7 +16,12 @@ extern crate core;
 extern crate std;
 
 
+use crate::config::{
+    DataEndpoint, DataType, MAX_STATIC_HEX_LENGTH, MAX_STATIC_STRING_LENGTH, MESSAGE_DATA_TYPES,
+    MESSAGE_ELEMENTS, MESSAGE_INFO_TYPES, MESSAGE_TYPES,
+};
 use crate::macros::{ReprI32Enum, ReprU32Enum};
+use strum::EnumCount;
 
 
 #[cfg(feature = "std")]
@@ -62,16 +67,12 @@ mod embedded_alloc {
 
     #[panic_handler]
     fn panic(_info: &PanicInfo) -> ! {
-        // only available when the target dependency `cortex-m` is pulled in
-        cortex_m::asm::bkpt();
         // Halt forever after that
-        loop {
-            cortex_m::asm::nop();
-        }
+        loop {}
     }
 
     // ensure cortex-m only compiles on embedded
-    use cortex_m as _;
+    // use cortex_m as _;
 }
 
 // For HOST builds (std is ON), the system allocator is used automatically.
@@ -80,10 +81,97 @@ mod embedded_alloc {
 // ---------- Portable core logic ----------
 mod c_api;
 mod config;
+mod lock;
 mod macros;
 mod router;
 mod serialize;
 mod telemetry_packet;
+
+// ----------------------Not User Editable----------------------
+#[allow(dead_code)]
+pub const STRING_VALUE_ELEMENTS: usize = 1;
+pub const DYNAMIC_ELEMENT: usize = 0;
+pub const MAX_VALUE_DATA_ENDPOINT: u32 = (DataEndpoint::COUNT - 1) as u32;
+pub const MAX_VALUE_DATA_TYPE: u32 = (DataType::COUNT - 1) as u32;
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum MessageSizeType {
+    Static(usize),
+    Dynamic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct MessageMeta {
+    pub data_size: MessageSizeType,
+    pub endpoints: &'static [DataEndpoint],
+}
+
+#[inline(always)]
+pub fn message_meta(ty: DataType) -> &'static MessageMeta {
+    &MESSAGE_TYPES[ty as usize]
+}
+
+#[inline(always)]
+pub const fn get_needed_message_size(ty: DataType) -> usize {
+    data_type_size(get_data_type(ty)) * MESSAGE_ELEMENTS[ty as usize]
+}
+
+#[inline(always)]
+pub const fn get_info_type(ty: DataType) -> MessageType {
+    MESSAGE_INFO_TYPES[ty as usize]
+}
+
+#[inline(always)]
+pub const fn get_data_type(ty: DataType) -> MessageDataType {
+    MESSAGE_DATA_TYPES[ty as usize]
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[allow(dead_code)]
+pub enum MessageDataType {
+    Float64,
+    Float32,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    UInt128,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Int128,
+    Bool,
+    String,
+    Hex,
+}
+pub const fn data_type_size(dt: MessageDataType) -> usize {
+    match dt {
+        MessageDataType::Float64 => size_of::<f64>(),
+        MessageDataType::Float32 => size_of::<f32>(),
+        MessageDataType::UInt8 => size_of::<u8>(),
+        MessageDataType::UInt16 => size_of::<u16>(),
+        MessageDataType::UInt32 => size_of::<u32>(),
+        MessageDataType::UInt64 => size_of::<u64>(),
+        MessageDataType::UInt128 => size_of::<u128>(),
+        MessageDataType::Int8 => size_of::<i8>(),
+        MessageDataType::Int16 => size_of::<i16>(),
+        MessageDataType::Int32 => size_of::<i32>(),
+        MessageDataType::Int64 => size_of::<i64>(),
+        MessageDataType::Int128 => size_of::<i128>(),
+        MessageDataType::Bool => size_of::<bool>(),
+        MessageDataType::String => MAX_STATIC_STRING_LENGTH,
+        MessageDataType::Hex => MAX_STATIC_HEX_LENGTH,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[allow(dead_code)]
+pub enum MessageType {
+    Info,
+    Error,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TelemetryError {
@@ -97,10 +185,10 @@ pub enum TelemetryError {
     BadArg,
     Deserialize(&'static str),
     Io(&'static str),
+    InvalidUtf8,
 }
 
 impl TelemetryError {
-    #[inline(always)]
     pub const fn to_error_code(&self) -> TelemetryErrorCode {
         match self {
             TelemetryError::InvalidType => TelemetryErrorCode::InvalidType,
@@ -113,6 +201,7 @@ impl TelemetryError {
             TelemetryError::BadArg => TelemetryErrorCode::BadArg,
             TelemetryError::Deserialize(_) => TelemetryErrorCode::Deserialize,
             TelemetryError::Io(_) => TelemetryErrorCode::Io,
+            TelemetryError::InvalidUtf8 => TelemetryErrorCode::InvalidUtf8,
         }
     }
 }
@@ -129,6 +218,7 @@ pub enum TelemetryErrorCode {
     BadArg = -9,
     Deserialize = -10,
     Io = -11,
+    InvalidUtf8 = -12,
 }
 
 impl_repr_i32_enum!(
@@ -151,6 +241,7 @@ impl TelemetryErrorCode {
             TelemetryErrorCode::BadArg => "{Bad Arg}",
             TelemetryErrorCode::Deserialize => "{Deserialize Error}",
             TelemetryErrorCode::Io => "{IO Error}",
+            TelemetryErrorCode::InvalidUtf8 => "{Invalid UTF-8}",
         }
     }
 

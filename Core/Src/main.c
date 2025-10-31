@@ -16,185 +16,109 @@
  ******************************************************************************
  */
 /* USER CODE END Header */
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "FreeRTOS.h"
+#include "barometer.h"
+#include "cmsis_os2.h"
 #include "gyro.h"
-#include "stm32g4xx_hal.h"
-#include "stm32g4xx_hal_def.h"
+#include "stm32g4xx_hal_gpio.h"
+#include "task.h"
+#include "telemetry.h"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include <inttypes.h>
+#include <math.h>
 #include <stdarg.h>
+#include <stdatomic.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-#include "barometer.h"
-#include "telemetry.h"
-#include "usbd_cdc_if.h"
-#include <inttypes.h>
-#include <sedsprintf.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
+/* ====================== Helpers & Globals ====================== */
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-
-/* USER CODE END Includes */
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
 SPI_HandleTypeDef hspi1;
 
-/* USER CODE BEGIN PV */
+/* Convert milliseconds to RTOS ticks (works for any tick freq) */
+#define MS_TO_TICKS(ms)                                                        \
+  ((uint32_t)((((uint64_t)(ms)) * osKernelGetTickFreq()) / 1000u))
 
-/* USER CODE END PV */
+/* Task handles */
+osThreadId_t TaskHandles[3];
+/* ---------------- Task attributes (sizes in bytes) ----------------
+   Start generously to avoid stack overflows from drivers/printf.
+   Tune down later with uxTaskGetStackHighWaterMark() if desired.
+*/
+enum {
+  STACK_DEFAULT = 512,
+  STACK_SENSOR = 1024 * 4,
+  STACK_DISPATCH = 1024 * 4
+};
 
-/* Private function prototypes -----------------------------------------------*/
+static const osThreadAttr_t defaultTask_attributes = {
+    .name = "defaultTask",
+    .priority = osPriorityNormal,
+    .stack_size = STACK_DEFAULT};
+static const osThreadAttr_t sensorTask_attributes = {
+    .name = "SensorTask",
+    .priority = osPriorityNormal,
+    .stack_size = STACK_SENSOR};
+static const osThreadAttr_t loggingTask_attributes = {
+    .name = "LoggingTask",
+    /* Make dispatcher a bit higher so it can drain queues promptly */
+    .priority = osPriorityNormal,
+    .stack_size = STACK_DISPATCH};
+
+/* ====================== Prototypes ====================== */
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
-/* USER CODE BEGIN PFP */
-/**
- * @brief  The application entry point.
- * @retval int
- */
+
+static void SetupTask(void *argument);
+static void SensorTask(void *arg);
+static void DispatchTask(void *arg);
+uint8_t router_ready = 0;
+/* ====================== Main ====================== */
+
 int main(void) {
-
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick.
-   */
   HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
   SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_SPI1_Init();
-  MX_USB_Device_Init();
-  /* USER CODE BEGIN 2 */
-  SedsResult r = init_telemetry_router();
-  if (r != SEDS_OK) {
-    print_telemetry_error(r);
+
+  /* Initialize RTOS kernel objects first */
+  osKernelInitialize();
+
+  /* Create threads */
+  TaskHandles[0] = osThreadNew(SetupTask, NULL, &defaultTask_attributes);
+  TaskHandles[1] = osThreadNew(SensorTask, NULL, &sensorTask_attributes);
+  TaskHandles[2] = osThreadNew(DispatchTask, NULL, &loggingTask_attributes);
+
+  if (!TaskHandles[0] || !TaskHandles[1] || !TaskHandles[2] /**/) {
+    /* Not enough heap or configTOTAL_HEAP_SIZE too small */
+    Error_Handler();
   }
 
-  if (gyro_init(&hspi1) != HAL_OK) {
-    die("gyro init failed\r\n");
-  }
-  if (init_barometer(&hspi1) != HAL_OK) {
+  /* Start scheduler */
+  osKernelStart();
 
-    die("barometer init failed\r\n");
-  }
-  /* USER CODE BEGIN 2 */
-
-  float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
-
-  gyro_data_t data;
-  HAL_StatusTypeDef st;
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  // BARO_CS_HIGH();
-  /* USER CODE BEGIN WHILE */
+  /* Should never reach here */
   while (1) {
-    // Statuses
-    //  get the barometer data
-    st = get_temperature_pressure_altitude_non_blocking(
-        &hspi1, &barometer_pressure[1], &barometer_pressure[0],
-        &barometer_pressure[2]);
-    // check the barometer read status
-    if (st != HAL_OK) {
-      die("barometer read failed: %d\r\n", st);
-    }
-
-    // get the gyro data
-    st = gyro_read(&hspi1, &data);
-    // check the gyro read status
-    if (st != HAL_OK) {
-      die("barometer read failed: %d\r\n", st);
-    }
-
-    // ===================logging=================
-    // log barometer data
-    r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA, barometer_pressure,
-                                   sizeof(barometer_pressure) /
-                                       sizeof(barometer_pressure[0]),
-                                   sizeof(barometer_pressure[0]));
-    if (r != SEDS_OK) {
-      print_telemetry_error(r);
-    }
-
-    // log gyro data
-    float gyro_vals[3];
-    gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
-    r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA, gyro_vals, 
-                                    sizeof(gyro_vals)/sizeof(gyro_vals[0]), 
-                                        sizeof(gyro_vals[0]));
-    if (r != SEDS_OK) {
-      print_telemetry_error(r);
-    }
-    
-    //====================process queues=================
-    if (process_all_queues_timeout(20) != SEDS_OK) {
-      print_telemetry_error(r);
-    }
-
-    // sleep for 500ms
-    HAL_Delay(500);
-
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
   }
-  /* USER CODE END 3 */
 }
 
-/**
- * @brief System Clock Configuration
- * @retval None
- */
+/* ====================== Clocks / Peripherals ====================== */
+
 void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
-   */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
   RCC_OscInitStruct.OscillatorType =
       RCC_OSCILLATORTYPE_HSI | RCC_OSCILLATORTYPE_HSI48;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
@@ -205,8 +129,6 @@ void SystemClock_Config(void) {
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
                                 RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
@@ -219,21 +141,9 @@ void SystemClock_Config(void) {
   }
 }
 
-/**
- * @brief SPI1 Initialization Function
- * @param None
- * @retval None
- */
 static void MX_SPI1_Init(void) {
-
-  /* USER CODE BEGIN SPI1_Init 0 */
-
-  /* USER CODE END SPI1_Init 0 */
-
-  /* USER CODE BEGIN SPI1_Init 1 */
-
-  /* USER CODE END SPI1_Init 1 */
-  /* SPI1 parameter configuration*/
+  /* NOTE: Ensure HAL_SPI_MspInit() configures SCK/MISO/MOSI AF pins
+     in stm32g4xx_hal_msp.c, or SPI will not drive pins. */
   hspi1.Instance = SPI1;
   hspi1.Init.Mode = SPI_MODE_MASTER;
   hspi1.Init.Direction = SPI_DIRECTION_2LINES;
@@ -251,180 +161,208 @@ static void MX_SPI1_Init(void) {
   if (HAL_SPI_Init(&hspi1) != HAL_OK) {
     Error_Handler();
   }
-  /* USER CODE BEGIN SPI1_Init 2 */
-
-  /* USER CODE END SPI1_Init 2 */
 }
 
-/**
- * @brief GPIO Initialization Function
- * @param None
- * @retval None
- */
 static void MX_GPIO_Init(void) {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
 
-  /* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
+  /* CS pins high */
   HAL_GPIO_WritePin(GPIOB, accel_CS_Pin | gyro_CS_Pin | baro_CS_Pin,
                     GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
+  /* LED low */
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : accel_CS_Pin gyro_CS_Pin baro_CS_Pin */
+  /* CS pins */
   GPIO_InitStruct.Pin = accel_CS_Pin | gyro_CS_Pin | baro_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : led_Pin */
+  /* LED */
   GPIO_InitStruct.Pin = led_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(led_GPIO_Port, &GPIO_InitStruct);
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
 }
 
-/* USER CODE BEGIN 4 */
+/* ====================== Tasks ====================== */
 
-/* USER CODE END 4 */
+/* CubeMX-style: do USB init in a “default” task after the scheduler starts.
+   Then initialize the telemetry router and release a semaphore
+   so other tasks can proceed. */
+static void SetupTask(void *argument) {
+  (void)argument;
+  /* Initialize USB device (creates RTOS resources internally) */
+  MX_USB_Device_Init();
 
-/**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1) {
-  }
-  /* USER CODE END Error_Handler_Debug */
-}
-#ifdef USE_FULL_ASSERT
-/**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
-void assert_failed(uint8_t *file, uint32_t line) {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line
-     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
-     line) */
-  /* USER CODE END 6 */
-}
-#endif /* USE_FULL_ASSERT */
-
-static volatile uint8_t cdc_tx_lock = 0;
-static void cdc_lock(void) {
-  while (__LDREXB(&cdc_tx_lock)) {
-  }
-  __STREXB(1, &cdc_tx_lock);
-  __DMB();
-}
-static void cdc_unlock(void) {
-  __DMB();
-  cdc_tx_lock = 0;
-}
-
-// Wait until previous packet is gone (TxState==0)
-static void cdc_wait_idle(void) {
-  extern USBD_HandleTypeDef hUsbDeviceFS;
-  while (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
-    USBD_CDC_HandleTypeDef *hcdc =
-        (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
-    if (!hcdc || hcdc->TxState == 0)
-      break;
-    HAL_Delay(1);
-  }
-}
-
-// Send buffer in 64B chunks, honor BUSY, and ZLP if len%64==0
-static void cdc_write_raw(const uint8_t *buf, uint16_t len) {
-  if (!buf || !len)
-    return;
-  cdc_lock();
-  uint16_t sent = 0;
-  while (sent < len) {
-    uint16_t chunk = MIN(64, (uint16_t)(len - sent));
-    USBD_StatusTypeDef st;
-    do {
-      st = CDC_Transmit_FS((uint8_t *)&buf[sent], chunk);
-      if (st == USBD_BUSY)
-        HAL_Delay(1);
-    } while (st == USBD_BUSY);
-    // If error or not configured, bail
-    if (st != USBD_OK) {
-      cdc_unlock();
-      return;
+  HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
+  /* Initialize telemetry router AFTER USB is up (if it needs endpoints) */
+  SedsResult r = init_telemetry_router();
+  if (r != SEDS_OK) {
+    while (1) {
+      print_telemetry_error(r);
     }
-    // Wait until IN transfer completes before next packet
-    cdc_wait_idle();
-    sent += chunk;
+    /* still continue to unlock, or block forever? choose to continue */
   }
-  // Zero-Length Packet if exactly multiple of 64 (forces flush on host)
-  if ((len & 0x3F) == 0) {
-    USBD_StatusTypeDef st;
-    do {
-      st = CDC_Transmit_FS(NULL, 0); // ZLP
-      if (st == USBD_BUSY)
-        HAL_Delay(1);
-    } while (st == USBD_BUSY);
-    cdc_wait_idle();
+  router_ready = 1;
+
+  HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
+
+  /* Idle loop */
+  while (1) {
+    osDelay(MS_TO_TICKS(100000));
   }
-  cdc_unlock();
+}
+
+static void SensorTask(void *arg) {
+  (void)arg;
+
+  /* Wait until router is ready (and USB initialized) */
+
+  while (!router_ready) {
+    osDelay(MS_TO_TICKS(10));
+  }
+  if (gyro_init(&hspi1) != HAL_OK) {
+    die("gyro init failed\r\n");
+  }
+  if (init_barometer(&hspi1) != HAL_OK) {
+    die("barometer init failed\r\n");
+  }
+
+  float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
+  gyro_data_t data = {0, 0, 0};
+
+  for (;;) {
+    /* Read barometer */
+    HAL_StatusTypeDef st = get_temperature_pressure_altitude_non_blocking(
+        &hspi1, &barometer_pressure[1], &barometer_pressure[0],
+        &barometer_pressure[2]);
+    if (st != HAL_OK) {
+      printf("barometer read failed: %d\r\n", st);
+    }
+
+    /* Read gyro */
+    st = gyro_read(&hspi1, &data);
+    if (st != HAL_OK) {
+      printf("gyro read failed: %d\r\n", st);
+    }
+
+    /* Log telemetry (async) */
+    SedsResult r;
+    r = log_telemetry_asynchronous(
+        SEDS_DT_BAROMETER_DATA, barometer_pressure,
+        (uint32_t)(sizeof(barometer_pressure) / sizeof(barometer_pressure[0])),
+        (uint32_t)sizeof(barometer_pressure[0]));
+
+    if (r != SEDS_OK) {
+      while (1) {
+        print_telemetry_error(r);
+      }
+    }
+
+    float gyro_vals[3];
+    gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
+
+    r = log_telemetry_asynchronous(
+        SEDS_DT_GYROSCOPE_DATA, gyro_vals,
+        (uint32_t)(sizeof(gyro_vals) / sizeof(gyro_vals[0])),
+        (uint32_t)sizeof(gyro_vals[0]));
+    if (r != SEDS_OK) {
+      while (1) {
+        print_telemetry_error(r);
+      }
+    }
+    /* 500 ms sample period */
+    osDelay(MS_TO_TICKS(500));
+  }
+}
+
+static void DispatchTask(void *arg) {
+  (void)arg;
+
+  /* Wait until router is ready */
+  while (!router_ready) {
+    osDelay(MS_TO_TICKS(10));
+  }
+
+  for (;;) {
+    /* Drain router queues for ~20 ms */
+    SedsResult r = process_all_queues_timeout(20);
+    if (r != SEDS_OK) {
+      while (1) {
+        print_telemetry_error(r);
+      }
+    }
+    /* Yield a bit */
+    osDelay(MS_TO_TICKS(5));
+  }
+}
+
+/* ====================== Error handling & CDC printf ====================== */
+
+void Error_Handler(void) {
+  /* Keep IRQs ON so SysTick/RTOS can run if alive */
+  /* Blink LED with crude delay (no HAL_Delay reliance) */
+  while (1) {
+    // HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
+    for (volatile uint32_t i = 0; i < 1000000; ++i) {
+      printf("Error Handler ahs been triggered\r\n");
+    }
+  }
+}
+
+#ifdef USE_FULL_ASSERT
+void assert_failed(uint8_t *file, uint32_t line) {
+  (void)file;
+  (void)line;
+  /* Optionally print or blink pattern */
+}
+#endif
+
+/* Safer CDC write: avoid infinite spin if cable unplugged/config not ready */
+static inline void cdc_write_blocking(const uint8_t *data, uint16_t len) {
+  uint32_t timeout = 256 * 4; /* ~100 ms budget while BUSY */
+  // if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) {
+  //   return; /* drop silently or buffer elsewhere */
+  // }
+  while (CDC_Transmit_FS((uint8_t *)data, len) == USBD_BUSY && timeout--) {
+    osDelay(MS_TO_TICKS(1));
+  }
 }
 
 #ifdef __GNUC__
-int _write(int file, char *ptr, int len) {
+int _write(int file, const char *ptr, int len) {
   (void)file;
   if (len <= 0)
     return 0;
 
-  // Convert \n -> \r\n into a small rolling buffer
-  uint8_t buf[128];
-  int i = 0;
-  while (i < len) {
-    int w = 0;
-    while (i < len && w < (int)sizeof(buf) - 1) {
-      uint8_t c = (uint8_t)ptr[i++];
-      if (c == '\n' && w < (int)sizeof(buf) - 2)
-        buf[w++] = '\r';
-      buf[w++] = c;
-    }
-    cdc_write_raw(buf, (uint16_t)w);
+  for (int i = 0; i < len; ++i) {
+    uint8_t out[2];
+    uint16_t n = 0;
+    uint8_t c = (uint8_t)ptr[i];
+    if (c == '\n')
+      out[n++] = '\r';
+    out[n++] = c;
+    cdc_write_blocking(out, n);
   }
   return len;
 }
 #else
 int fputc(int ch, FILE *f) {
   (void)f;
-  uint8_t two[2];
+  uint8_t out[2];
   uint16_t n = 0;
   if (ch == '\n')
-    two[n++] = '\r';
-  two[n++] = (uint8_t)ch;
-  cdc_write_raw(two, n);
+    out[n++] = '\r';
+  out[n++] = (uint8_t)ch;
+  cdc_write_blocking(out, n);
   return ch;
 }
 #endif
-
-// Optionally, call this once after USB init:
-void cdc_stdio_unbuffered(void) { setvbuf(stdout, NULL, _IONBF, 0); }

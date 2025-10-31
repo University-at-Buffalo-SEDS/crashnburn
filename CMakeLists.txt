@@ -71,6 +71,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf_rs)
 # Add linked libraries
 target_link_libraries(
     stm32cubemx
-
-    # Add user defined libraries
 )
+

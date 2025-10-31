@@ -4,20 +4,17 @@
 
 use crate::router::{Clock, LeBytes};
 use crate::{
-    config::DataEndpoint, do_vec_log_typed, router,
+    config::DataEndpoint, config::MessageSizeType,
+    do_vec_log_typed, message_meta, router,
     router::{BoardConfig, EndpointHandler, Router},
-    serialize::deserialize_packet, serialize::packet_wire_size,
+    serialize::deserialize_packet, serialize::packet_wire_size, serialize::peek_envelope,
     serialize::serialize_packet,
-    telemetry_packet::{DataType, TelemetryPacket},
-    TelemetryError,
-    TelemetryErrorCode,
-    TelemetryResult,
+    telemetry_packet::{DataType, TelemetryPacket}
+    , TelemetryError, TelemetryErrorCode, TelemetryResult,
 };
-
-use crate::config::MAX_STRING_LENGTH;
-use crate::serialize::peek_envelope;
 use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 use core::{ffi::c_char, ffi::c_void, mem::size_of, ptr, slice, str::from_utf8};
+
 // ============================ status / error helpers ============================
 
 const SEDS_EK_UNSIGNED: u32 = 0;
@@ -54,7 +51,6 @@ pub struct SedsOwnedHeader {
     timestamp: u64,
 }
 
-#[inline]
 fn status_from_result_code(e: SedsResult) -> i32 {
     match e {
         SedsResult::SedsOk => 0,
@@ -62,12 +58,10 @@ fn status_from_result_code(e: SedsResult) -> i32 {
     }
 }
 
-#[inline(always)]
 fn status_from_err(e: TelemetryError) -> i32 {
     e.to_error_code() as i32
 }
 
-#[inline(always)]
 fn ok_or_status(r: TelemetryResult<()>) -> i32 {
     match r {
         Ok(()) => status_from_result_code(SedsResult::SedsOk),
@@ -75,15 +69,14 @@ fn ok_or_status(r: TelemetryResult<()>) -> i32 {
     }
 }
 
-#[inline(always)]
-fn expected_payload_size_for(ty: DataType) -> Option<usize> {
-    match ty {
-        DataType::MessageData => Some(MAX_STRING_LENGTH),
-        _ => None,
+#[inline]
+fn fixed_payload_size_if_static(ty: DataType) -> Option<usize> {
+    match message_meta(ty).data_size {
+        MessageSizeType::Static(n) => Some(n),
+        MessageSizeType::Dynamic => None,
     }
 }
 
-#[inline(always)]
 fn opt_ts(ts_ptr: *const u64) -> Option<u64> {
     if ts_ptr.is_null() {
         None
@@ -92,18 +85,15 @@ fn opt_ts(ts_ptr: *const u64) -> Option<u64> {
     }
 }
 
-#[inline(always)]
 fn dtype_from_u32(x: u32) -> TelemetryResult<DataType> {
     DataType::try_from_u32(x).ok_or(TelemetryError::InvalidType)
 }
 
-#[inline(always)]
 fn endpoint_from_u32(x: u32) -> TelemetryResult<DataEndpoint> {
     DataEndpoint::try_from_u32(x).ok_or(TelemetryError::Deserialize("bad endpoint"))
 }
 
 // Unified helper to dispatch queue vs. immediate and optional timestamp.
-#[inline(always)]
 fn call_log_or_queue<T: LeBytes>(
     router: *mut SedsRouter,
     ty: DataType,
@@ -112,14 +102,13 @@ fn call_log_or_queue<T: LeBytes>(
     queue: bool,
 ) -> TelemetryResult<()> {
     unsafe {
+        let r = &(*router).inner; // shared borrow only
         if queue {
-            let r = &mut (*router).inner;
             match ts {
                 Some(t) => r.log_queue_ts::<T>(ty, t, data),
                 None => r.log_queue::<T>(ty, data),
             }
         } else {
-            let r = &(*router).inner;
             match ts {
                 Some(t) => r.log_ts::<T>(ty, t, data),
                 None => r.log::<T>(ty, data),
@@ -128,7 +117,6 @@ fn call_log_or_queue<T: LeBytes>(
     }
 }
 
-#[inline(always)]
 fn finish_with<T: LeBytes + Copy>(
     r: *mut SedsRouter,
     ty: DataType,
@@ -144,14 +132,13 @@ fn finish_with<T: LeBytes + Copy>(
         return status_from_err(TelemetryError::Io("vectorize_data failed"));
     }
     ok_or_status(unsafe {
+        let router = &(*r).inner; // shared borrow
         if queue {
-            let router = &mut (*r).inner;
             match ts {
                 Some(t) => router.log_queue_ts::<T>(ty, t, &tmp),
                 None => router.log_queue::<T>(ty, &tmp),
             }
         } else {
-            let router = &(*r).inner;
             match ts {
                 Some(t) => router.log_ts::<T>(ty, t, &tmp),
                 None => router.log::<T>(ty, &tmp),
@@ -184,7 +171,7 @@ pub struct SedsPacketView {
 type CTransmit = Option<extern "C" fn(bytes: *const u8, len: usize, user: *mut c_void) -> i32>;
 type CEndpointHandler = Option<extern "C" fn(pkt: *const SedsPacketView, user: *mut c_void) -> i32>;
 type CSerializedHandler =
-    Option<extern "C" fn(bytes: *const u8, len: usize, user: *mut c_void) -> i32>;
+Option<extern "C" fn(bytes: *const u8, len: usize, user: *mut c_void) -> i32>;
 
 #[repr(C)]
 pub struct SedsHandlerDesc {
@@ -259,8 +246,8 @@ unsafe fn write_str_to_buf(s: &str, buf: *mut c_char, buf_len: usize) -> i32 {
     }
 
     let ncopy = core::cmp::min(s.len(), buf_len.saturating_sub(1));
-    unsafe { ptr::copy_nonoverlapping(s.as_ptr(), buf as *mut u8, ncopy) };
-    unsafe { *buf.add(ncopy) = 0 };
+    unsafe{ptr::copy_nonoverlapping(s.as_ptr(), buf as *mut u8, ncopy);
+    *buf.add(ncopy) = 0};
 
     // If too small, return required size (not success)
     if buf_len < needed {
@@ -387,7 +374,6 @@ struct FfiClock {
 }
 
 impl Clock for FfiClock {
-    #[inline(always)]
     fn now_ms(&self) -> u64 {
         if let Some(f) = self.cb {
             f(self.user_addr as *mut c_void)
@@ -452,7 +438,7 @@ pub extern "C" fn seds_router_new(
                                 }
                                 endpoints_ptr = stack_eps.as_ptr();
                                 num_endpoints = pkt.endpoints.len();
-                                _owned_vec = None::<Vec<u32>>; // keep a same-scope binding for lifetime symmetry
+                                _owned_vec = None::<Vec<u32>>; // lifetimes: keep binding
                             } else {
                                 // Rare path: heap
                                 let mut eps_u32 = Vec::with_capacity(pkt.endpoints.len());
@@ -558,26 +544,23 @@ pub extern "C" fn seds_router_log_bytes_ex(
     let ts = opt_ts(timestamp_ms_opt);
 
     // If this type has a fixed schema size, pad/truncate to exactly that many bytes.
-    if let Some(required) = expected_payload_size_for(ty) {
+    if let Some(required) = fixed_payload_size_if_static(ty) {
         // Fast path: exact match → pass through
         if src.len() == required {
             return ok_or_status(call_log_or_queue::<u8>(r, ty, ts, src, queue));
         }
 
-        // Build a zero-filled buffer of the required size and copy what we have.
-        // (Truncate if src is longer; pad with 0x00 if shorter.)
+        // Build zero-filled buffer of the required size and copy what we have.
         let mut tmp = vec![0u8; required];
         let ncopy = core::cmp::min(src.len(), required);
         if ncopy > 0 {
             tmp[..ncopy].copy_from_slice(&src[..ncopy]);
         }
 
-        // Pass the padded buffer
         return ok_or_status(call_log_or_queue::<u8>(r, ty, ts, &tmp, queue));
-        // (tmp lives until after the call, so the slice is valid)
     }
 
-    // Otherwise, no fixed size known → pass through as-is
+    // Otherwise (Dynamic): pass through as-is
     ok_or_status(call_log_or_queue::<u8>(r, ty, ts, src, queue))
 }
 
@@ -630,15 +613,12 @@ pub extern "C" fn seds_router_log_typed_ex(
     };
     let ts = opt_ts(timestamp_ms_opt);
 
-    // Common padded path: if the type declares a fixed payload size, reshape to it in BYTES
-    // first, then convert to Vec<T>.
-    if let Some(required_bytes) = expected_payload_size_for(ty) {
-        // required_bytes must be divisible by elem_size to be representable as T
+    // Common padded path ONLY if the type declares a fixed payload size
+    if let Some(required_bytes) = fixed_payload_size_if_static(ty) {
         if required_bytes % elem_size != 0 {
             return status_from_err(TelemetryError::BadArg);
         }
 
-        // Build zero-filled buffer of exactly required_bytes and copy from the C buffer
         let src_bytes_len = count.saturating_mul(elem_size);
         let src = unsafe { slice::from_raw_parts(data as *const u8, src_bytes_len) };
 
@@ -648,10 +628,7 @@ pub extern "C" fn seds_router_log_typed_ex(
             padded[..ncopy].copy_from_slice(&src[..ncopy]);
         }
 
-        // Convert padded bytes -> Vec<T> using existing unaligned reader
         let required_elems = required_bytes / elem_size;
-
-        // Use a small generic to avoid duplicating match arms
 
         return match (elem_kind, elem_size) {
             (SEDS_EK_UNSIGNED, 1) => {
@@ -678,7 +655,7 @@ pub extern "C" fn seds_router_log_typed_ex(
         };
     }
 
-    // No fixed-size requirement: fall back the fast path
+    // No fixed-size requirement (Dynamic): fast path, no resizing
     match (elem_kind, elem_size) {
         (SEDS_EK_UNSIGNED, 1) => do_vec_log_typed!(r, ty, ts, queue, data, count, u8),
         (SEDS_EK_UNSIGNED, 2) => do_vec_log_typed!(r, ty, ts, queue, data, count, u16),
@@ -729,14 +706,7 @@ pub extern "C" fn seds_router_log_typed(
     elem_kind: u32,
 ) -> i32 {
     seds_router_log_typed_ex(
-        r,
-        ty_u32,
-        data,
-        count,
-        elem_size,
-        elem_kind,
-        ptr::null(),
-        false,
+        r, ty_u32, data, count, elem_size, elem_kind, ptr::null(), false,
     )
 }
 
@@ -749,16 +719,7 @@ pub extern "C" fn seds_router_log_queue_typed(
     elem_size: usize,
     elem_kind: u32,
 ) -> i32 {
-    seds_router_log_typed_ex(
-        r,
-        ty_u32,
-        data,
-        count,
-        elem_size,
-        elem_kind,
-        ptr::null(),
-        true,
-    )
+    seds_router_log_typed_ex(r, ty_u32, data, count, elem_size, elem_kind, ptr::null(), true)
 }
 
 // -------------------- Receive / queue RX --------------------
@@ -772,7 +733,7 @@ pub extern "C" fn seds_router_receive_serialized(
     if r.is_null() || (len > 0 && bytes.is_null()) {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &(*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     let slice = unsafe { slice::from_raw_parts(bytes, len) };
     ok_or_status(router.receive_serialized(slice))
 }
@@ -782,7 +743,7 @@ pub extern "C" fn seds_router_receive(r: *mut SedsRouter, view: *const SedsPacke
     if r.is_null() || view.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &(*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     let pkt = match view_to_packet(unsafe { &*view }) {
         Ok(p) => p,
         Err(_) => return status_from_err(TelemetryError::InvalidType),
@@ -798,7 +759,7 @@ pub extern "C" fn seds_router_queue_tx_message(
     if r.is_null() || view.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     let pkt = match view_to_packet(unsafe { &*view }) {
         Ok(p) => p,
         Err(_) => return status_from_err(TelemetryError::InvalidType),
@@ -813,7 +774,7 @@ pub extern "C" fn seds_router_process_send_queue(r: *mut SedsRouter) -> i32 {
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     ok_or_status(router.process_send_queue())
 }
 
@@ -822,7 +783,7 @@ pub extern "C" fn seds_router_process_received_queue(r: *mut SedsRouter) -> i32 
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     ok_or_status(router.process_received_queue())
 }
 
@@ -835,7 +796,7 @@ pub extern "C" fn seds_router_rx_serialized_packet_to_queue(
     if r.is_null() || (len > 0 && bytes.is_null()) {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     let slice = unsafe { slice::from_raw_parts(bytes, len) };
     ok_or_status(router.rx_serialized_packet_to_queue(slice))
 }
@@ -848,7 +809,7 @@ pub extern "C" fn seds_router_rx_packet_to_queue(
     if r.is_null() || view.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     let pkt = match view_to_packet(unsafe { &*view }) {
         Ok(p) => p,
         Err(_) => return status_from_err(TelemetryError::InvalidType),
@@ -861,7 +822,7 @@ pub extern "C" fn seds_router_process_all_queues(r: *mut SedsRouter) -> i32 {
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     ok_or_status(router.process_all_queues())
 }
 
@@ -870,7 +831,7 @@ pub extern "C" fn seds_router_clear_queues(r: *mut SedsRouter) -> i32 {
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     router.clear_queues();
     status_from_result_code(SedsResult::SedsOk)
 }
@@ -880,7 +841,7 @@ pub extern "C" fn seds_router_clear_rx_queue(r: *mut SedsRouter) -> i32 {
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     router.clear_rx_queue();
     status_from_result_code(SedsResult::SedsOk)
 }
@@ -890,7 +851,7 @@ pub extern "C" fn seds_router_clear_tx_queue(r: *mut SedsRouter) -> i32 {
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     router.clear_tx_queue();
     status_from_result_code(SedsResult::SedsOk)
 }
@@ -905,7 +866,7 @@ pub extern "C" fn seds_router_process_tx_queue_with_timeout(
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     ok_or_status(router.process_tx_queue_with_timeout(timeout_ms))
 }
 
@@ -917,7 +878,7 @@ pub extern "C" fn seds_router_process_rx_queue_with_timeout(
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     ok_or_status(router.process_rx_queue_with_timeout(timeout_ms))
 }
 
@@ -929,7 +890,7 @@ pub extern "C" fn seds_router_process_all_queues_with_timeout(
     if r.is_null() {
         return status_from_err(TelemetryError::BadArg);
     }
-    let router = unsafe { &mut (*r).inner };
+    let router = unsafe { &(*r).inner }; // shared borrow
     ok_or_status(router.process_all_queues_with_timeout(timeout_ms))
 }
 
