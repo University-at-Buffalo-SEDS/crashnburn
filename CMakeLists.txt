@@ -73,20 +73,3 @@ target_link_libraries(
     stm32cubemx
 )
 
-# ---- FreeRTOS config interface (provides FreeRTOSConfig.h include path) ----
-add_library(freertos_config INTERFACE)
-target_include_directories(freertos_config SYSTEM INTERFACE
-    ${CMAKE_SOURCE_DIR}/Core/Inc   # path containing FreeRTOSConfig.h
-)
-
-# ---- FreeRTOS-Kernel (select port/heap before adding subdir) ----
-set(FREERTOS_PORT GCC_ARM_CM4F CACHE STRING "")
-set(FREERTOS_HEAP 4             CACHE STRING "")  # heap_4.c
-add_subdirectory(${CMAKE_SOURCE_DIR}/FreeRTOS-Kernel)
-
-target_link_libraries(freertos_kernel PUBLIC freertos_config)
-target_compile_options(freertos_kernel PRIVATE
-    -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-)
-
-target_link_libraries(${CMAKE_PROJECT_NAME} freertos_kernel)

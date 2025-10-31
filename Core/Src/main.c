@@ -18,9 +18,13 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "FreeRTOS.h"
+#include "barometer.h"
+#include "cmsis_os.h"
+#include "cmsis_os2.h"
 #include "gyro.h"
-#include "stm32g4xx_hal.h"
-#include "stm32g4xx_hal_def.h"
+#include "task.h"
+#include "telemetry.h"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include <inttypes.h>
@@ -28,11 +32,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include "barometer.h"
-#include "telemetry.h"
-#include "FreeRTOS.h"
-#include "task.h"
-
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -57,6 +56,20 @@
 /* Private variables ---------------------------------------------------------*/
 SPI_HandleTypeDef hspi1;
 
+/* Definitions for defaultTask */
+osThreadId_t TaskHandles[3];
+const osThreadAttr_t defaultTask_attributes = {
+    .name = "defaultTask",
+    .priority = (osPriority_t)osPriorityNormal,
+    .stack_size = 128 * 4};
+const osThreadAttr_t sensorTask_attributes = {
+    .name = "SensorTask",
+    .priority = (osPriority_t)osPriorityNormal,
+    .stack_size = 128 * 4};
+const osThreadAttr_t loggingTask_attributes = {
+    .name = "LoggingTask",
+    .priority = (osPriority_t)osPriorityIdle + 1,
+    .stack_size = 128 * 4};
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -65,18 +78,17 @@ SPI_HandleTypeDef hspi1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
-
+void StartDefaultTask(void *argument);
 static void SensorTask(void *arg);
 static void DispatchTask(void *arg);
 
+/* USER CODE END PFP */
 
-#define SENSOR_TASK_STACK     (512)
-#define DISPATCH_TASK_STACK   (384)
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 
-/* Priorities: higher number = higher priority */
-#define SENSOR_TASK_PRIO      (tskIDLE_PRIORITY + 2)
-#define DISPATCH_TASK_PRIO    (tskIDLE_PRIORITY + 1)
-/* USER CODE BEGIN PFP */
+/* USER CODE END 0 */
+
 /**
  * @brief  The application entry point.
  * @retval int
@@ -110,8 +122,44 @@ int main(void) {
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
 
-  // die("test death\r\n");
+  /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of defaultTask */
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+
+  /* We should never get here as control is now taken by the scheduler */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
   SedsResult r = init_telemetry_router();
   if (r != SEDS_OK) {
     print_telemetry_error(r);
@@ -126,23 +174,14 @@ int main(void) {
   }
 
   // ---- Create tasks ----
-  BaseType_t ok = pdPASS;
-  printf("Creating tasks...\r\n");
-  ok &= xTaskCreate(SensorTask,   "sensor",   SENSOR_TASK_STACK,   NULL, SENSOR_TASK_PRIO,   NULL);
-  ok &= xTaskCreate(DispatchTask, "dispatch", DISPATCH_TASK_STACK, NULL, DISPATCH_TASK_PRIO, NULL);
-  if (ok != pdPASS) {
-    die("xTaskCreate failed\r\n");
-  }
-  printf("Task Created\r\nStaring Scheduler\r\n");
-
+  TaskHandles[0] = osThreadNew(SensorTask, NULL, &sensorTask_attributes);
+  TaskHandles[1] = osThreadNew(DispatchTask, NULL, &loggingTask_attributes);
+  //TaskHandles[2] = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  // Check task creation
   // ---- Go! ----
-  vTaskStartScheduler();
-
-  // If we ever get here, heap/port config is wrong
-  while(1) {
-    printf("FATAL: vTaskStartScheduler returned!\r\n");
+  osKernelStart();
+  while (1) {
   }
-
   /* USER CODE END 3 */
 }
 
@@ -266,6 +305,26 @@ static void MX_GPIO_Init(void) {
 }
 
 /* USER CODE BEGIN 4 */
+
+/* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+ * @brief  Function implementing the defaultTask thread.
+ * @param  argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void *argument) {
+  /* init code for USB_Device */
+  MX_USB_Device_Init();
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for (;;) {
+    osDelay(1);
+  }
+  /* USER CODE END 5 */
+}
 static void SensorTask(void *arg) {
   (void)arg;
 
@@ -275,7 +334,8 @@ static void SensorTask(void *arg) {
   for (;;) {
     // ---- Read barometer ----
     HAL_StatusTypeDef st = get_temperature_pressure_altitude_non_blocking(
-        &hspi1, &barometer_pressure[1], &barometer_pressure[0], &barometer_pressure[2]);
+        &hspi1, &barometer_pressure[1], &barometer_pressure[0],
+        &barometer_pressure[2]);
     if (st != HAL_OK) {
       die("barometer read failed: %d\r\n", st);
     }
@@ -289,26 +349,26 @@ static void SensorTask(void *arg) {
     // ---- Log telemetry (asynchronous) ----
     SedsResult r;
 
-    r = log_telemetry_asynchronous(SEDS_DT_BAROMETER_DATA,
-                                   barometer_pressure,
-                                   (uint32_t)(sizeof(barometer_pressure) / sizeof(barometer_pressure[0])),
-                                   (uint32_t)sizeof(barometer_pressure[0]));
+    r = log_telemetry_asynchronous(
+        SEDS_DT_BAROMETER_DATA, barometer_pressure,
+        (uint32_t)(sizeof(barometer_pressure) / sizeof(barometer_pressure[0])),
+        (uint32_t)sizeof(barometer_pressure[0]));
     if (r != SEDS_OK) {
       print_telemetry_error(r);
     }
 
     float gyro_vals[3];
     gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
-    r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA,
-                                   gyro_vals,
-                                   (uint32_t)(sizeof(gyro_vals) / sizeof(gyro_vals[0])),
-                                   (uint32_t)sizeof(gyro_vals[0]));
+    r = log_telemetry_asynchronous(
+        SEDS_DT_GYROSCOPE_DATA, gyro_vals,
+        (uint32_t)(sizeof(gyro_vals) / sizeof(gyro_vals[0])),
+        (uint32_t)sizeof(gyro_vals[0]));
     if (r != SEDS_OK) {
       print_telemetry_error(r);
     }
 
     // Sample period: 500 ms
-    vTaskDelay(pdMS_TO_TICKS(500));
+    osDelay(pdMS_TO_TICKS(500));
   }
 }
 
@@ -323,11 +383,9 @@ static void DispatchTask(void *arg) {
     }
 
     // Back off a bit to let other tasks run; tune as needed
-    vTaskDelay(pdMS_TO_TICKS(5));
+    osDelay(pdMS_TO_TICKS(5));
   }
 }
-/* USER CODE END 4 */
-
 /**
  * @brief  This function is executed in case of error occurrence.
  * @retval None
@@ -359,21 +417,23 @@ void assert_failed(uint8_t *file, uint32_t line) {
 
 static inline void cdc_write_blocking(const uint8_t *data, uint16_t len) {
   // Busy-wait with a tiny delay until the CDC endpoint accepts the packet.
-  while (CDC_Transmit_FS((uint8_t*)data, len) == USBD_BUSY) {
-    vTaskDelay(1);
+  while (CDC_Transmit_FS((uint8_t *)data, len) == USBD_BUSY) {
+    osDelay(1);
   }
 }
 
 #ifdef __GNUC__
 int _write(int file, const char *ptr, int len) {
   (void)file;
-  if (len <= 0) return 0;
+  if (len <= 0)
+    return 0;
 
   for (int i = 0; i < len; ++i) {
     uint8_t out[2];
     uint16_t n = 0;
     uint8_t c = (uint8_t)ptr[i];
-    if (c == '\n') out[n++] = '\r';
+    if (c == '\n')
+      out[n++] = '\r';
     out[n++] = c;
     cdc_write_blocking(out, n);
   }
@@ -384,7 +444,8 @@ int fputc(int ch, FILE *f) {
   (void)f;
   uint8_t out[2];
   uint16_t n = 0;
-  if (ch == '\n') out[n++] = '\r';
+  if (ch == '\n')
+    out[n++] = '\r';
   out[n++] = (uint8_t)ch;
   cdc_write_blocking(out, n);
   return ch;
