@@ -1,26 +1,28 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * File Name          : app_freertos.c
-  * Description        : Code for freertos applications
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * File Name          : app_freertos.c
+ * Description        : Code for freertos applications
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
-#include "task.h"
 #include "main.h"
+#include "task.h"
+#include <stdio.h>
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -57,14 +59,23 @@
 
 /* USER CODE END Application */
 
-
-
 void vApplicationStackOverflowHook(TaskHandle_t t, char *name) {
-  (void)t; (void)name;
+  (void)t;
+  (void)name;
   // quick GPIO pattern – no printf
-  while (1) { HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin); for (volatile int i=0;i<200000;i++){} }
+  while (1) {
+    HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
+    printf("stack overflowed");
+    for (volatile int i = 0; i < 200000; i++) {
+    }
+  }
 }
 
 void vApplicationMallocFailedHook(void) {
-  while (1) { HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin); for (volatile int i=0;i<8000000;i++){} }
+  while (1) {
+    HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
+    printf("Malloc_failed");
+    for (volatile int i = 0; i < 8000000; i++) {
+    }
+  }
 }
