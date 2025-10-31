@@ -77,7 +77,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 
-static void StartDefaultTask(void *argument);
+static void SetupTask(void *argument);
 static void SensorTask(void *arg);
 static void DispatchTask(void *arg);
 uint8_t router_ready = 0;
@@ -94,7 +94,7 @@ int main(void) {
   osKernelInitialize();
 
   /* Create threads */
-  TaskHandles[0] = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  TaskHandles[0] = osThreadNew(SetupTask, NULL, &defaultTask_attributes);
   TaskHandles[1] = osThreadNew(SensorTask, NULL, &sensorTask_attributes);
   TaskHandles[2] = osThreadNew(DispatchTask, NULL, &loggingTask_attributes);
 
@@ -197,7 +197,7 @@ static void MX_GPIO_Init(void) {
 /* CubeMX-style: do USB init in a “default” task after the scheduler starts.
    Then initialize the telemetry router and release a semaphore
    so other tasks can proceed. */
-static void StartDefaultTask(void *argument) {
+static void SetupTask(void *argument) {
   (void)argument;
   /* Initialize USB device (creates RTOS resources internally) */
   MX_USB_Device_Init();
