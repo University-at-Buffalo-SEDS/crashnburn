@@ -280,7 +280,7 @@ static void SensorTask(void *arg) {
       }
     }
     /* 500 ms sample period */
-    osDelay(MS_TO_TICKS(20));
+    osDelay(MS_TO_TICKS(500));
   }
 }
 
