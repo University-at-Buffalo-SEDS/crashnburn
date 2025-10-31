@@ -57,3 +57,14 @@
 
 /* USER CODE END Application */
 
+
+
+void vApplicationStackOverflowHook(TaskHandle_t t, char *name) {
+  (void)t; (void)name;
+  // quick GPIO pattern – no printf
+  while (1) { HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin); for (volatile int i=0;i<200000;i++){} }
+}
+
+void vApplicationMallocFailedHook(void) {
+  while (1) { HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin); for (volatile int i=0;i<8000000;i++){} }
+}
