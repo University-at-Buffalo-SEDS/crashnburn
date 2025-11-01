@@ -47,7 +47,7 @@ SPI_HandleTypeDef hspi1;
   ((uint32_t)((((uint64_t)(ms)) * osKernelGetTickFreq()) / 1000u))
 
 /* Task handles */
-osThreadId_t TaskHandles[3];
+osThreadId_t TaskHandles[2];
 /* ---------------- Task attributes (sizes in bytes) ----------------
    Start generously to avoid stack overflows from drivers/printf.
    Tune down later with uxTaskGetStackHighWaterMark() if desired.
@@ -58,10 +58,6 @@ enum {
   STACK_DISPATCH = 1024 * 4
 };
 
-static const osThreadAttr_t defaultTask_attributes = {
-    .name = "defaultTask",
-    .priority = osPriorityNormal,
-    .stack_size = STACK_DEFAULT};
 static const osThreadAttr_t sensorTask_attributes = {
     .name = "SensorTask",
     .priority = osPriorityNormal,
@@ -77,7 +73,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 
-static void SetupTask(void *argument);
+static void SetupSystem(void *argument);
 static void SensorTask(void *arg);
 static void DispatchTask(void *arg);
 uint8_t router_ready = 0;
@@ -94,11 +90,10 @@ int main(void) {
   osKernelInitialize();
 
   /* Create threads */
-  TaskHandles[0] = osThreadNew(SetupTask, NULL, &defaultTask_attributes);
-  TaskHandles[1] = osThreadNew(SensorTask, NULL, &sensorTask_attributes);
-  TaskHandles[2] = osThreadNew(DispatchTask, NULL, &loggingTask_attributes);
-
-  if (!TaskHandles[0] || !TaskHandles[1] || !TaskHandles[2] /**/) {
+  TaskHandles[0] = osThreadNew(SensorTask, NULL, &sensorTask_attributes);
+  TaskHandles[1] = osThreadNew(DispatchTask, NULL, &loggingTask_attributes);
+  SetupSystem(NULL); // Call setup task directly before starting scheduler
+  if (!TaskHandles[0] || !TaskHandles[1]) {
     /* Not enough heap or configTOTAL_HEAP_SIZE too small */
     Error_Handler();
   }
@@ -197,7 +192,7 @@ static void MX_GPIO_Init(void) {
 /* CubeMX-style: do USB init in a “default” task after the scheduler starts.
    Then initialize the telemetry router and release a semaphore
    so other tasks can proceed. */
-static void SetupTask(void *argument) {
+static void SetupSystem(void *argument) {
   (void)argument;
   /* Initialize USB device (creates RTOS resources internally) */
   MX_USB_Device_Init();
@@ -214,11 +209,6 @@ static void SetupTask(void *argument) {
   router_ready = 1;
 
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
-
-  /* Idle loop */
-  while (1) {
-    osDelay(MS_TO_TICKS(100000));
-  }
 }
 
 static void SensorTask(void *arg) {
