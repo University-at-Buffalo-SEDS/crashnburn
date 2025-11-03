@@ -122,9 +122,7 @@ pub const fn get_message_meta(data_type: DataType) -> MessageMeta {
         DataType::GyroscopeData => {
             MessageMeta {
                 // Barometer Data
-                data_size: MessageSizeType::Static(get_needed_message_size(
-                    data_type,
-                )),
+                data_size: MessageSizeType::Static(get_needed_message_size(data_type)),
                 endpoints: &[DataEndpoint::Serial],
             }
         }
