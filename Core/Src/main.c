@@ -281,7 +281,7 @@ static void SensorTask(void *arg) {
     vPrintHeapStats("SensorTask");
 #endif
     /* 500 ms sample period */
-    osDelay(MS_TO_TICKS(500));
+    osDelay(MS_TO_TICKS(50));
   }
 }
 
@@ -301,7 +301,7 @@ static void DispatchTask(void *arg) {
       }
     }
     /* Yield a bit */
-    osDelay(MS_TO_TICKS(50));
+    osDelay(MS_TO_TICKS(2));
   }
 }
 

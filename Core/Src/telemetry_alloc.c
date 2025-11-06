@@ -1,7 +1,7 @@
 // Core/Src/telemetry_alloc.c
 #include <stddef.h>
 #include <stdlib.h>
-#include "FREERTOS.h"
+#include "FreeRTOS.h"
 
 /*
  * Rust expects these functions to exist for heap allocations:
