@@ -39,8 +39,7 @@
 #include <time.h>
 
 /* Debug prints */
-//#define DEBUG_PRINTS
-
+// #define DEBUG_PRINTS
 
 /* ====================== Helpers & Globals ====================== */
 
@@ -273,6 +272,9 @@ static void SensorTask(void *arg) {
         print_telemetry_error(r);
       }
     }
+#ifdef DEBUG_PRINTS
+    vPrintHeapStats("SensorTask");
+#endif
     /* 500 ms sample period */
     osDelay(MS_TO_TICKS(500));
   }
@@ -287,11 +289,11 @@ static void DispatchTask(void *arg) {
   }
 
   for (;;) {
-    /* Drain router queues for ~1000 ms */
-    #ifdef DEBUG_PRINTS
-    vPrintHeapStats();
-    #endif
-    SedsResult r = process_all_queues_timeout(1000);
+/* Drain router queues for ~1000 ms */
+#ifdef DEBUG_PRINTS
+   vPrintHeapStats("dispatch_task");
+#endif
+    SedsResult r = process_all_queues_timeout(0);
     if (r != SEDS_OK) {
       while (1) {
         print_telemetry_error(r);
@@ -323,43 +325,96 @@ void assert_failed(uint8_t *file, uint32_t line) {
 }
 #endif
 
-/* Safer CDC write: avoid infinite spin if cable unplugged/config not ready */
-static inline void cdc_write_blocking(const uint8_t *data, uint16_t len) {
-  uint32_t timeout = 256 * 4; /* ~100 ms budget while BUSY */
-  // if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) {
-  //   return; /* drop silently or buffer elsewhere */
-  // }
-  while (CDC_Transmit_FS((uint8_t *)data, len) == USBD_BUSY && timeout--) {
-    osDelay(MS_TO_TICKS(1));
+static volatile uint8_t cdc_tx_lock = 0;
+static void cdc_lock(void) {
+  while (__LDREXB(&cdc_tx_lock)) {
+  }
+  __STREXB(1, &cdc_tx_lock);
+  __DMB();
+}
+static void cdc_unlock(void) {
+  __DMB();
+  cdc_tx_lock = 0;
+}
+
+// Wait until previous packet is gone (TxState==0)
+static void cdc_wait_idle(void) {
+  extern USBD_HandleTypeDef hUsbDeviceFS;
+  while (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
+    USBD_CDC_HandleTypeDef *hcdc =
+        (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
+    if (!hcdc || hcdc->TxState == 0)
+      break;
+    HAL_Delay(1);
   }
 }
 
+// Send buffer in 64B chunks, honor BUSY, and ZLP if len%64==0
+static void cdc_write_raw(const uint8_t *buf, uint16_t len) {
+  if (!buf || !len)
+    return;
+  cdc_lock();
+  uint16_t sent = 0;
+  while (sent < len) {
+    uint16_t chunk = MIN(64, (uint16_t)(len - sent));
+    USBD_StatusTypeDef st;
+    do {
+      st = CDC_Transmit_FS((uint8_t *)&buf[sent], chunk);
+      if (st == USBD_BUSY)
+        HAL_Delay(1);
+    } while (st == USBD_BUSY);
+    // If error or not configured, bail
+    if (st != USBD_OK) {
+      cdc_unlock();
+      return;
+    }
+    // Wait until IN transfer completes before next packet
+    cdc_wait_idle();
+    sent += chunk;
+  }
+  // Zero-Length Packet if exactly multiple of 64 (forces flush on host)
+  if ((len & 0x3F) == 0) {
+    USBD_StatusTypeDef st;
+    do {
+      st = CDC_Transmit_FS(NULL, 0); // ZLP
+      if (st == USBD_BUSY)
+        HAL_Delay(1);
+    } while (st == USBD_BUSY);
+    cdc_wait_idle();
+  }
+  cdc_unlock();
+}
+
 #ifdef __GNUC__
-int _write(int file, const char *ptr, int len) {
+int _write(int file, char *ptr, int len) {
   (void)file;
   if (len <= 0)
     return 0;
 
-  for (int i = 0; i < len; ++i) {
-    uint8_t out[2];
-    uint16_t n = 0;
-    uint8_t c = (uint8_t)ptr[i];
-    if (c == '\n')
-      out[n++] = '\r';
-    out[n++] = c;
-    cdc_write_blocking(out, n);
+  // Convert \n -> \r\n into a small rolling buffer
+  uint8_t buf[128];
+  int i = 0;
+  while (i < len) {
+    int w = 0;
+    while (i < len && w < (int)sizeof(buf) - 1) {
+      uint8_t c = (uint8_t)ptr[i++];
+      if (c == '\n' && w < (int)sizeof(buf) - 2)
+        buf[w++] = '\r';
+      buf[w++] = c;
+    }
+    cdc_write_raw(buf, (uint16_t)w);
   }
   return len;
 }
 #else
 int fputc(int ch, FILE *f) {
   (void)f;
-  uint8_t out[2];
+  uint8_t two[2];
   uint16_t n = 0;
   if (ch == '\n')
-    out[n++] = '\r';
-  out[n++] = (uint8_t)ch;
-  cdc_write_blocking(out, n);
+    two[n++] = '\r';
+  two[n++] = (uint8_t)ch;
+  cdc_write_raw(two, n);
   return ch;
 }
 #endif
