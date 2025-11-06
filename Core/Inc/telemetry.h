@@ -48,6 +48,8 @@ SedsResult process_all_queues_timeout(uint32_t timeout_ms);
 
 SedsResult print_telemetry_error(int32_t error_code);
 
+void vPrintHeapStats(void);
+
 void die(const char *fmt, ...);
 
 #ifdef __cplusplus

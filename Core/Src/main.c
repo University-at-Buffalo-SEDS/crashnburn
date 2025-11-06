@@ -38,6 +38,10 @@
 #include <string.h>
 #include <time.h>
 
+/* Debug prints */
+//#define DEBUG_PRINTS
+
+
 /* ====================== Helpers & Globals ====================== */
 
 SPI_HandleTypeDef hspi1;
@@ -283,8 +287,11 @@ static void DispatchTask(void *arg) {
   }
 
   for (;;) {
-    /* Drain router queues for ~20 ms */
-    SedsResult r = process_all_queues_timeout(20);
+    /* Drain router queues for ~1000 ms */
+    #ifdef DEBUG_PRINTS
+    vPrintHeapStats();
+    #endif
+    SedsResult r = process_all_queues_timeout(1000);
     if (r != SEDS_OK) {
       while (1) {
         print_telemetry_error(r);

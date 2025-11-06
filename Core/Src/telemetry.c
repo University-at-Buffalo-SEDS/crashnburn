@@ -1,4 +1,6 @@
 #include "telemetry.h"
+#include "FREERTOSConfig.h"
+#include "FreeRTOS.h"
 #include "cmsis_os2.h"
 #include "sedsprintf.h"
 #include "stm32g4xx_hal.h"
@@ -6,6 +8,20 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+void vPrintHeapStats(void) {
+  size_t free_now = xPortGetFreeHeapSize();
+  size_t min_ever_free = xPortGetMinimumEverFreeHeapSize();
+
+  size_t total = configTOTAL_HEAP_SIZE; // bytes
+  size_t used_now = total - free_now;
+  size_t max_used = total - min_ever_free;
+
+  printf("Heap total: %u bytes\r\nHeap used : %u bytes\r\nHeap free : %u "
+         "bytes\r\nHeap max used (high-water): %u bytes\r\n",
+         (unsigned)total, (unsigned)used_now, (unsigned)free_now,
+         (unsigned)max_used);
+}
 
 /* ---------------- Time helpers: 32->64 extender ---------------- */
 static uint64_t stm_now_ms(void *user) {
