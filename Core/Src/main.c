@@ -70,7 +70,7 @@ static const osThreadAttr_t sensorTask_attributes = {
 static const osThreadAttr_t loggingTask_attributes = {
     .name = "LoggingTask",
     /* Make dispatcher a bit higher so it can drain queues promptly */
-    .priority = osPriorityNormal + 1,
+    .priority = osPriorityNormal,
     .stack_size = STACK_DISPATCH};
 
 /* ====================== Prototypes ====================== */
@@ -358,137 +358,173 @@ static void cdc_unlock(void) {
   (void)osMutexRelease(cdc_mutex);
 }
 
-// Wait until previous packet is gone (TxState==0)
-static void cdc_wait_idle(uint32_t timeout_ms) {
-  uint32_t start = HAL_GetTick();
-
-  while (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
-    USBD_CDC_HandleTypeDef *hcdc =
-        (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
-    if (!hcdc || hcdc->TxState == 0) {
-      break;
-    }
-
-    if ((HAL_GetTick() - start) >= timeout_ms) {
-      /* Give up after timeout; avoid hard lock if USB wedges */
-      break;
-    }
-
-    /* If kernel running, yield; otherwise busy-wait */
-    if (cdc_kernel_running()) {
-      osDelay(1);
-    } else {
-      HAL_Delay(1);
-    }
-  }
+static inline uint8_t usb_is_configured(void) {
+  return (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) &&
+         (hUsbDeviceFS.pClassData != NULL);
 }
 
-// Send buffer in 64B chunks, honor BUSY, and ZLP if len%64==0
 static void cdc_write_raw(const uint8_t *buf, uint16_t len) {
-  if (!buf || !len) {
+  if (!buf || !len || cdc_in_isr()) {
     return;
   }
 
-  /* Do NOT attempt CDC TX from ISR; just drop to avoid deadlocks. */
-  if (cdc_in_isr()) {
-    return;
-  }
-
-  /* If USB not configured, silently drop (printf as best-effort debug) */
-  if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) {
+  // If USB not configured, drop immediately (prevents heap blowup)
+  if (!usb_is_configured()) {
     return;
   }
 
   cdc_lock();
 
   uint16_t sent = 0;
+  uint32_t start_overall = HAL_GetTick();
+  const uint32_t overall_budget_ms = 5;  // max time we'll spend per _write()
+  const uint32_t per_wait_budget_ms = 2; // per-chunk wait for TxState to clear
+
   while (sent < len) {
-    uint16_t chunk = MIN(64, (uint16_t)(len - sent));
-    USBD_StatusTypeDef st;
-    uint32_t start = HAL_GetTick();
-
-    /* Try to submit this chunk, with timeout if BUSY */
-    do {
-      st = CDC_Transmit_FS((uint8_t *)&buf[sent], chunk);
-      if (st == USBD_BUSY) {
-        if ((HAL_GetTick() - start) >= 1000U) { // 1s timeout
-          /* Give up on this chunk; avoid hard lock */
-          cdc_unlock();
-          return;
-        }
-        if (cdc_kernel_running()) {
-          osDelay(1);
-        } else {
-          HAL_Delay(1);
-        }
-      }
-    } while (st == USBD_BUSY);
-
-    /* If error or not configured anymore, bail out */
-    if (st != USBD_OK || hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) {
-      cdc_unlock();
-      return;
+    // If USB disappears mid-write: stop and return
+    if (!usb_is_configured()) {
+      break;
     }
 
-    /* Wait until IN transfer completes before next packet, bounded time */
-    cdc_wait_idle(1000U); // 1s max
-    sent += chunk;
-  }
+    USBD_CDC_HandleTypeDef *hcdc =
+        (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
+    if (!hcdc) {
+      break;
+    }
 
-  // Zero-Length Packet if exactly multiple of 64 (forces flush on host)
-  if ((len & 0x3F) == 0) {
-    USBD_StatusTypeDef st;
-    uint32_t start = HAL_GetTick();
-    do {
-      st = CDC_Transmit_FS(NULL, 0); // ZLP
-      if (st == USBD_BUSY) {
-        if ((HAL_GetTick() - start) >= 1000U) {
-          break; // give up
-        }
+    // Respect overall time budget so we never stall the RTOS
+    if ((HAL_GetTick() - start_overall) >= overall_budget_ms) {
+      break; // drop the rest of this line
+    }
+
+    // Wait a *tiny* bit for previous TX to finish
+    uint32_t wait_start = HAL_GetTick();
+    while (hcdc->TxState != 0) {
+      if (!usb_is_configured()) {
+        cdc_unlock();
+        return;
+      }
+
+      if ((HAL_GetTick() - wait_start) >= per_wait_budget_ms ||
+          (HAL_GetTick() - start_overall) >= overall_budget_ms) {
+        cdc_unlock();
+        return;
+      }
+
         if (cdc_kernel_running()) {
           osDelay(1);
         } else {
           HAL_Delay(1);
         }
       }
-    } while (st == USBD_BUSY);
 
-    cdc_wait_idle(1000U);
+      // TX is idle and USB configured: send next up-to-64B chunk
+      uint16_t chunk = len - sent;
+      if (chunk > 64)
+        chunk = 64;
+
+      USBD_StatusTypeDef st = CDC_Transmit_FS((uint8_t *)&buf[sent], chunk);
+      if (st != USBD_OK) {
+        // Don't fight it: drop remainder of this write
+        cdc_unlock();
+        return;
+      }
+
+      sent += chunk;
+    }
+
+    cdc_unlock();
   }
-
-  cdc_unlock();
-}
 
 #ifdef __GNUC__
-int _write(int file, char *ptr, int len) {
-  (void)file;
-  if (len <= 0)
-    return 0;
-
-  // Convert \n -> \r\n into a small rolling buffer
-  uint8_t buf[128];
-  int i = 0;
-  while (i < len) {
-    int w = 0;
-    while (i < len && w < (int)sizeof(buf) - 1) {
-      uint8_t c = (uint8_t)ptr[i++];
-      if (c == '\n' && w < (int)sizeof(buf) - 2)
-        buf[w++] = '\r';
-      buf[w++] = c;
+  int _write(int file, char *ptr, int len) {
+    (void)file;
+    if (len <= 0) {
+      return 0;
     }
-    cdc_write_raw(buf, (uint16_t)w);
+
+    // If USB not configured, pretend we consumed everything (best-effort debug)
+    if (!usb_is_configured()) {
+      return len;
+    }
+
+    uint8_t buf[128];
+    int i = 0;
+
+    // Track if the last character we *sent* was '\r'
+    static uint8_t last_was_cr = 0;
+
+    while (i < len) {
+      uint16_t w = 0;
+
+      while (i < len && w < sizeof(buf)) {
+        uint8_t c = (uint8_t)ptr[i++];
+
+        if (c == '\n') {
+          // We want: "\r\n" if previous char was NOT '\r'
+          if (!last_was_cr) {
+            // Make sure we have space for both '\r' and '\n'
+            if (w > (uint16_t)(sizeof(buf) - 2)) {
+              // Not enough room; back up one and flush this buffer
+              i--; // re-process this '\n' in the next iteration
+              break;
+            }
+            buf[w++] = '\r';
+          }
+
+          // Now write '\n'
+          if (w >= sizeof(buf)) {
+            // No more room; back up one and flush
+            i--;
+            break;
+          }
+          buf[w++] = '\n';
+          last_was_cr = 0; // last emitted was '\n'
+        } else {
+          // Normal char (could be '\r' itself)
+          if (w >= sizeof(buf)) {
+            // No room, back up one char and flush buffer
+            i--;
+            break;
+          }
+          buf[w++] = c;
+          last_was_cr = (c == '\r');
+        }
+      }
+
+      if (w > 0) {
+        cdc_write_raw(buf, w);
+      }
+    }
+
+    return len;
   }
-  return len;
-}
 #else
-int fputc(int ch, FILE *f) {
-  (void)f;
-  uint8_t two[2];
-  uint16_t n = 0;
-  if (ch == '\n')
-    two[n++] = '\r';
-  two[n++] = (uint8_t)ch;
-  cdc_write_raw(two, n);
-  return ch;
-}
+  int fputc(int ch, FILE *f) {
+    (void)f;
+
+    static uint8_t last_was_cr = 0;
+    uint8_t buf[2];
+    uint16_t w = 0;
+
+    if (!usb_is_configured()) {
+      return ch;
+    }
+
+    if (ch == '\n') {
+      if (!last_was_cr) {
+        buf[w++] = '\r';
+      }
+      buf[w++] = '\n';
+      last_was_cr = 0;
+    } else {
+      buf[w++] = (uint8_t)ch;
+      last_was_cr = (ch == '\r');
+    }
+
+    if (w > 0) {
+      cdc_write_raw(buf, w);
+    }
+    return ch;
+  }
 #endif
