@@ -35,6 +35,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/gyro.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/telemetry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/barometer.c    
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/telemetry_alloc.c    
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32g4xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32g4xx_hal_msp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/sysmem.c

@@ -44,6 +44,8 @@
 /* ====================== Helpers & Globals ====================== */
 
 SPI_HandleTypeDef hspi1;
+static osMutexId_t cdc_mutex;
+extern USBD_HandleTypeDef hUsbDeviceFS;
 
 /* Convert milliseconds to RTOS ticks (works for any tick freq) */
 #define MS_TO_TICKS(ms)                                                        \
@@ -68,7 +70,7 @@ static const osThreadAttr_t sensorTask_attributes = {
 static const osThreadAttr_t loggingTask_attributes = {
     .name = "LoggingTask",
     /* Make dispatcher a bit higher so it can drain queues promptly */
-    .priority = osPriorityNormal,
+    .priority = osPriorityNormal + 1,
     .stack_size = STACK_DISPATCH};
 
 /* ====================== Prototypes ====================== */
@@ -79,6 +81,7 @@ static void MX_SPI1_Init(void);
 static void SetupSystem(void *argument);
 static void SensorTask(void *arg);
 static void DispatchTask(void *arg);
+void cdc_printf_init(void);
 uint8_t router_ready = 0;
 /* ====================== Main ====================== */
 
@@ -198,10 +201,13 @@ static void MX_GPIO_Init(void) {
 static void SetupSystem(void *argument) {
   (void)argument;
   /* Initialize USB device (creates RTOS resources internally) */
-  MX_USB_Device_Init();
-
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
+  MX_USB_Device_Init();
+  cdc_printf_init();
+
   /* Initialize telemetry router AFTER USB is up (if it needs endpoints) */
+}
+static void init_router() {
   SedsResult r = init_telemetry_router();
   if (r != SEDS_OK) {
     while (1) {
@@ -210,7 +216,6 @@ static void SetupSystem(void *argument) {
     /* still continue to unlock, or block forever? choose to continue */
   }
   router_ready = 1;
-
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 }
 
@@ -282,16 +287,12 @@ static void SensorTask(void *arg) {
 
 static void DispatchTask(void *arg) {
   (void)arg;
-
-  /* Wait until router is ready */
-  while (!router_ready) {
-    osDelay(MS_TO_TICKS(10));
-  }
+  init_router();
 
   for (;;) {
 /* Drain router queues for ~1000 ms */
 #ifdef DEBUG_PRINTS
-   vPrintHeapStats("dispatch_task");
+    vPrintHeapStats("dispatch_task");
 #endif
     SedsResult r = process_all_queues_timeout(0);
     if (r != SEDS_OK) {
@@ -300,7 +301,7 @@ static void DispatchTask(void *arg) {
       }
     }
     /* Yield a bit */
-    osDelay(MS_TO_TICKS(5));
+    osDelay(MS_TO_TICKS(50));
   }
 }
 
@@ -316,7 +317,15 @@ void Error_Handler(void) {
     }
   }
 }
-
+void cdc_printf_init(void) {
+  const osMutexAttr_t attr = {
+      .name = "cdc_tx_mutex",
+      .attr_bits = 0U,
+      .cb_mem = NULL,
+      .cb_size = 0U,
+  };
+  cdc_mutex = osMutexNew(&attr);
+}
 #ifdef USE_FULL_ASSERT
 void assert_failed(uint8_t *file, uint32_t line) {
   (void)file;
@@ -325,63 +334,128 @@ void assert_failed(uint8_t *file, uint32_t line) {
 }
 #endif
 
-static volatile uint8_t cdc_tx_lock = 0;
-static void cdc_lock(void) {
-  while (__LDREXB(&cdc_tx_lock)) {
-  }
-  __STREXB(1, &cdc_tx_lock);
-  __DMB();
+static inline int cdc_in_isr(void) {
+  return (__get_IPSR() != 0U); // CMSIS core function
 }
+
+/* Helper: is the kernel running? */
+static inline int cdc_kernel_running(void) {
+  return (osKernelGetState() == osKernelRunning);
+}
+
+static void cdc_lock(void) {
+  /* Do NOT try to lock from ISR or before scheduler: just drop / best effort */
+  if (!cdc_kernel_running() || cdc_in_isr() || cdc_mutex == NULL) {
+    return;
+  }
+  (void)osMutexAcquire(cdc_mutex, osWaitForever);
+}
+
 static void cdc_unlock(void) {
-  __DMB();
-  cdc_tx_lock = 0;
+  if (!cdc_kernel_running() || cdc_in_isr() || cdc_mutex == NULL) {
+    return;
+  }
+  (void)osMutexRelease(cdc_mutex);
 }
 
 // Wait until previous packet is gone (TxState==0)
-static void cdc_wait_idle(void) {
-  extern USBD_HandleTypeDef hUsbDeviceFS;
+static void cdc_wait_idle(uint32_t timeout_ms) {
+  uint32_t start = HAL_GetTick();
+
   while (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
     USBD_CDC_HandleTypeDef *hcdc =
         (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
-    if (!hcdc || hcdc->TxState == 0)
+    if (!hcdc || hcdc->TxState == 0) {
       break;
-    HAL_Delay(1);
+    }
+
+    if ((HAL_GetTick() - start) >= timeout_ms) {
+      /* Give up after timeout; avoid hard lock if USB wedges */
+      break;
+    }
+
+    /* If kernel running, yield; otherwise busy-wait */
+    if (cdc_kernel_running()) {
+      osDelay(1);
+    } else {
+      HAL_Delay(1);
+    }
   }
 }
 
 // Send buffer in 64B chunks, honor BUSY, and ZLP if len%64==0
 static void cdc_write_raw(const uint8_t *buf, uint16_t len) {
-  if (!buf || !len)
+  if (!buf || !len) {
     return;
+  }
+
+  /* Do NOT attempt CDC TX from ISR; just drop to avoid deadlocks. */
+  if (cdc_in_isr()) {
+    return;
+  }
+
+  /* If USB not configured, silently drop (printf as best-effort debug) */
+  if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) {
+    return;
+  }
+
   cdc_lock();
+
   uint16_t sent = 0;
   while (sent < len) {
     uint16_t chunk = MIN(64, (uint16_t)(len - sent));
     USBD_StatusTypeDef st;
+    uint32_t start = HAL_GetTick();
+
+    /* Try to submit this chunk, with timeout if BUSY */
     do {
       st = CDC_Transmit_FS((uint8_t *)&buf[sent], chunk);
-      if (st == USBD_BUSY)
-        HAL_Delay(1);
+      if (st == USBD_BUSY) {
+        if ((HAL_GetTick() - start) >= 1000U) { // 1s timeout
+          /* Give up on this chunk; avoid hard lock */
+          cdc_unlock();
+          return;
+        }
+        if (cdc_kernel_running()) {
+          osDelay(1);
+        } else {
+          HAL_Delay(1);
+        }
+      }
     } while (st == USBD_BUSY);
-    // If error or not configured, bail
-    if (st != USBD_OK) {
+
+    /* If error or not configured anymore, bail out */
+    if (st != USBD_OK || hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) {
       cdc_unlock();
       return;
     }
-    // Wait until IN transfer completes before next packet
-    cdc_wait_idle();
+
+    /* Wait until IN transfer completes before next packet, bounded time */
+    cdc_wait_idle(1000U); // 1s max
     sent += chunk;
   }
+
   // Zero-Length Packet if exactly multiple of 64 (forces flush on host)
   if ((len & 0x3F) == 0) {
     USBD_StatusTypeDef st;
+    uint32_t start = HAL_GetTick();
     do {
       st = CDC_Transmit_FS(NULL, 0); // ZLP
-      if (st == USBD_BUSY)
-        HAL_Delay(1);
+      if (st == USBD_BUSY) {
+        if ((HAL_GetTick() - start) >= 1000U) {
+          break; // give up
+        }
+        if (cdc_kernel_running()) {
+          osDelay(1);
+        } else {
+          HAL_Delay(1);
+        }
+      }
     } while (st == USBD_BUSY);
-    cdc_wait_idle();
+
+    cdc_wait_idle(1000U);
   }
+
   cdc_unlock();
 }
 
