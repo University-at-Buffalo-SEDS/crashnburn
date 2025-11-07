@@ -24,7 +24,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -66,28 +65,25 @@ void vApplicationStackOverflowHook(TaskHandle_t t, char *name) {
   // quick GPIO pattern – no printf
   if (!in_error_state) {
     in_error_state = 1;
-  
-  while (1) {
-    HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
-    printf("stack overflowed");
-    for (volatile int i = 0; i < 200000; i++) {
-    }
-  }
-  }
-  while (1){
 
+    while (1) {
+      HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
+      printf("stack overflowed");
+      for (volatile int i = 0; i < 200000; i++) {
+      }
+    }
   }
 }
 
 void vApplicationMallocFailedHook(void) {
   if (!in_error_state) {
     in_error_state = 1;
-  
-  while (1) {
-    HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
-    printf("Malloc_failed");
-    for (volatile int i = 0; i < 8000000; i++) {
+
+    while (1) {
+      HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
+      printf("Malloc_failed");
+      for (volatile int i = 0; i < 8000000; i++) {
+      }
     }
-  }}
-  while(1){}
+  }
 }
