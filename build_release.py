@@ -15,7 +15,7 @@ def main() -> None:
     # 1) Configure with CMake
     run([
         "cmake",
-        f"-DCMAKE_BUILD_TYPE=release",
+        f"-DCMAKE_BUILD_TYPE=Release",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         "-DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake",
         "-DCMAKE_COMMAND=cmake",
