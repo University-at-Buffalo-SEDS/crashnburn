@@ -60,7 +60,7 @@ osThreadId_t TaskHandles[2];
 enum {
   STACK_DEFAULT = 512,
   STACK_SENSOR = 1024 * 4,
-  STACK_DISPATCH = 1024 * 4
+  STACK_DISPATCH = 1024 * 8
 };
 
 static const osThreadAttr_t sensorTask_attributes = {
