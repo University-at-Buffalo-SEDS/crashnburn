@@ -281,7 +281,7 @@ static void SensorTask(void *arg) {
     vPrintHeapStats("SensorTask");
 #endif
     /* 500 ms sample period */
-    osDelay(MS_TO_TICKS(10));
+    osDelay(MS_TO_TICKS(15));
   }
 }
 
