@@ -281,7 +281,7 @@ static void SensorTask(void *arg) {
     vPrintHeapStats("SensorTask");
 #endif
     /* 500 ms sample period */
-    osDelay(MS_TO_TICKS(50));
+    osDelay(MS_TO_TICKS(10));
   }
 }
 
@@ -301,7 +301,7 @@ static void DispatchTask(void *arg) {
       }
     }
     /* Yield a bit */
-    osDelay(MS_TO_TICKS(2));
+    // osDelay(MS_TO_TICKS(2));
   }
 }
 
@@ -377,8 +377,8 @@ static void cdc_write_raw(const uint8_t *buf, uint16_t len) {
 
   uint16_t sent = 0;
   uint32_t start_overall = HAL_GetTick();
-  const uint32_t overall_budget_ms = 5;  // max time we'll spend per _write()
-  const uint32_t per_wait_budget_ms = 2; // per-chunk wait for TxState to clear
+  const uint32_t overall_budget_ms = 1;  // max time we'll spend per _write()
+  const uint32_t per_wait_budget_ms = 1; // per-chunk wait for TxState to clear
 
   while (sent < len) {
     // If USB disappears mid-write: stop and return

@@ -20,7 +20,7 @@ use strum_macros::EnumCount;
 ///
 /// This string is attached to every telemetry packet and is used to identify
 /// the platform in downstream tools. It should be **unique per platform**.
-pub const DEVICE_IDENTIFIER: &str = "CrashNBurn";
+pub const DEVICE_IDENTIFIER: &str = "CNB";
 
 /// Maximum length, in bytes, of any **static** UTF-8 string payload.
 ///
