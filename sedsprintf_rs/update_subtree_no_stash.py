@@ -30,7 +30,6 @@ def main() -> None:
 
     print(f"Detected subtree branch: {branch}")
 
-    # Let git subtree pull talk directly to the terminal → colors preserved
     run([
         "git",
         "subtree",
