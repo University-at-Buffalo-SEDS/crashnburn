@@ -120,6 +120,7 @@ int main(void) {
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
 
   gyro_data_t data;
+  accelData_t accel_data;
   HAL_StatusTypeDef st;
 
   /* USER CODE END 2 */
@@ -161,6 +162,19 @@ int main(void) {
     r = log_telemetry_asynchronous(SEDS_DT_GYROSCOPE_DATA, gyro_vals, 
                                     sizeof(gyro_vals)/sizeof(gyro_vals[0]), 
                                         sizeof(gyro_vals[0]));
+    if (r != SEDS_OK) {
+      print_telemetry_error(r);
+    }
+
+    // accel data
+    st = accel_read(&hspi1, &accel_data)
+    if (st != HAL_OK) {
+      die("accel read failed: %d\r\n", st);
+    }
+    float accel_vals[3] = convert_raw_accel_to_mg(&accel_data);
+    r = log_telemetry_asynchronous(SEDS_DT_ACCELEROMETER_DATA, accel_vals, 
+                                    sizeof(accel_vals)/sizeof(accel_vals[0]), 
+                                        sizeof(accel_vals[0]));
     if (r != SEDS_OK) {
       print_telemetry_error(r);
     }
