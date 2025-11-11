@@ -17,7 +17,6 @@
 
 //ACCEL CONFIGS
 #define accel_reset_val     0xB6
-#define accel_POWER_ON     0x04
 #define accel_range_val     0x03
 #define accel_conf_val      0x28
 
