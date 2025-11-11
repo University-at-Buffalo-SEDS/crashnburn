@@ -51,7 +51,7 @@ HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *
 HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg, uint8_t *dst, uint16_t len);
 
 //configure the accelerometer
-HAL_StatusTypeDef accel_config(SPI_HandleTypeDef *hspi);
+HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi);
 
 //Read X axis data
 HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accelData_t *accelData);

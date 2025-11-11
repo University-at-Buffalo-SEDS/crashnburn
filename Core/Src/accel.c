@@ -47,27 +47,36 @@ HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg, 
 }
 
 //configure the accelerometer
-HAL_StatusTypeDef accel_config(SPI_HandleTypeDef *hspi)
+HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
 {
-  accel_write_reg(hspi, accel_pwr_ctrl, POWER_ON); //power on
-  HAL_Delay(10);
+  HAL_StatusTypeDef status;
 
-  uint8_t data; 
-  HAL_StatusTypeDef status = accel_read_reg(hspi, accel_chip_id_addr, &data);
+  status = accel_write_reg(hspi, accel_pwr_ctrl, POWER_ON); //power on
+  if (status != HAL_OK) return status;
+  HAL_Delay(30); 
 
-  if (status != HAL_OK){
-    return status;
-  }
-
-  if (data != 0x1E) {    //if the chip address is different than expcted, throw a fault. 
+  uint8_t data = 0;
+  /* WHO_AM_I should be 0x1E at 0x00 (Taken directly from Gyro Driver)*/ 
+  status = accel_read_reg(hspi, accel_chip_id_addr, &data);
+  if (status != HAL_OK) return status;
+  if (data != 0x1E) {
+    printf("Accel WHOAMI mismatch: 0x%02X (exp 0x1E)\n", data);
     return HAL_ERROR;
-  }
+    }
 
-  status = accel_write_reg(hspi, accel_reset_addr, 0xB6); //soft reset chip
-  HAL_Delay(5);
-  accel_write_reg(hspi, accel_range_addr, 0x03); //range set to ±24g
+  //soft reset
+  status = accel_write_reg(hspi, accel_reset_addr, 0xB6);
+  if (status != HAL_OK) return status;
+  HAL_Delay(2);
+
+  //ODR set to 1600hz 
+  status = accel_write_reg(hspi, accel_range_addr, 0x03); //range set to ±24g
+  if (status != HAL_OK) return status;
   HAL_Delay(1);
-  accel_write_reg(hspi, accel_conf_addr, 0x28); //
+
+  //Bandwith of low pass filter config to normal
+  status = accel_write_reg(hspi, accel_conf_addr, ((0x0A << 4) | 0x0C)); //
+  if (status != HAL_OK) return status;
   HAL_Delay(5);
 
   return HAL_OK;
