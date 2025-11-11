@@ -1,6 +1,7 @@
 #include "main.h"
 #include "stm32g4xx_hal.h"
 #include "accel.h"
+#include "stdio.h"
 
 static inline void accel_cs_low(void) {HAL_GPIO_WritePin(accel_CS_GPIO_Port, accel_CS_Pin, GPIO_PIN_RESET);}
 static inline void accel_cs_high(void) {HAL_GPIO_WritePin(accel_CS_GPIO_Port, accel_CS_Pin, GPIO_PIN_SET);}

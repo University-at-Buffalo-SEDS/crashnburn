@@ -116,6 +116,9 @@ int main(void) {
 
     die("barometer init failed\r\n");
   }
+  if (accel_init(&hspi1) != HAL_OK) {
+    die("accelerometer init failed\r\n");
+  }
   /* USER CODE BEGIN 2 */
 
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
