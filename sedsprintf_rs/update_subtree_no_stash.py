@@ -14,7 +14,7 @@ def main() -> None:
         "pull",
         "--prefix=sedsprintf_rs",
         "sedsprintf-upstream",
-        "main",
+        "dev",
         "-m",
         "Merge sedsprintf_rs upstream main",
     ])
