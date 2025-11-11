@@ -80,12 +80,31 @@ HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accelData_t *accelData){
   if (status != HAL_OK){
     return status;
   }
-  accelData->x = (rxBuffer[1] << 8) | rxBuffer[0]; //set struct values to raw data from accel
-  accelData->y = (rxBuffer[3] << 8) | rxBuffer[2];
-  accelData->z = (rxBuffer[5] << 8) | rxBuffer[4];
+  accelData->x = (int16_t)((uint16_t)(rxBuffer[1] << 8) | rxBuffer[0]; //set struct values to raw data from accel
+  accelData->y = (int16_t)((uint16_t)(rxBuffer[3] << 8) | rxBuffer[2];
+  accelData->z = (int16_t)((uint16_t)(rxBuffer[5] << 8) | rxBuffer[4];
   return HAL_OK;
 }
 
+/*
+static float accel_sensitivity_mg_per_lsb(AccelRange range)
+{
+    switch (range) {
+    case ACCEL_RANGE_3g:  return 10.923f;
+    case ACCEL_RANGE_6g:  return 5.461f;
+    case ACCEL_RANGE_12g:  return 2.730f;
+    case ACCEL_RANGE_24g: return 1.365f;
+    default:                 return 1.365f; // safe fallback
+    }
+}
+*/
+
+float convert_accel_raw_to_mg(accelData_t data, float *x, float *y, float *z){
+  float mg_per_lsb = 24000.0f / 32768.0f;
+  x = data.x * mg_per_lsb;
+  y = data.y * mg_per_lsb;
+  z = data.z * mg_per_lsb;
+}
 
 
 
