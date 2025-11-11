@@ -1,4 +1,5 @@
 //REGISTER MAPPING
+#include <stdint.h>
 #define accel_reset_addr    0x7E
 #define accel_chip_id_addr  0x00
 #define accel_conf_addr     0x40
@@ -23,21 +24,21 @@
 
 
 typedef enum {
-    POWER_ON = 0x04
+    POWER_ON = 0x04,
     POWER_OFF = 0x00
 } accel_power;
 
 typedef enum {
-    ACCEL_RANGE_3g = 0x00;
-    ACCEL_RANGE_6g = 0x01;
-    ACCEL_RANGE_12g = 0x02;
-    ACCEL_RANGE_24g = 0x03;
+    ACCEL_RANGE_3g = 0x00,
+    ACCEL_RANGE_6g = 0x01,
+    ACCEL_RANGE_12g = 0x02,
+    ACCEL_RANGE_24g = 0x03
 } AccelRange;
 
 typedef struct {
-    float accel_x;
-    float accel_y;
-    float accel_z;
+    uint16_t x;
+    uint16_t y;
+    uint16_t z;
 } accelData_t;
 
 
