@@ -171,7 +171,8 @@ int main(void) {
     if (st != HAL_OK) {
       die("accel read failed: %d\r\n", st);
     }
-    float accel_vals[3] = convert_raw_accel_to_mg(&accel_data);
+    float accel_vals[3];
+    convert_raw_accel_to_mg(&accel_data, &accel_vals[0], &accel_vals[1], &accel_vals[2]);
     r = log_telemetry_asynchronous(SEDS_DT_ACCELEROMETER_DATA, accel_vals, 
                                     sizeof(accel_vals)/sizeof(accel_vals[0]), 
                                         sizeof(accel_vals[0]));
