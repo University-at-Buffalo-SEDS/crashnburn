@@ -20,7 +20,7 @@ use strum_macros::EnumCount;
 ///
 /// This string is attached to every telemetry packet and is used to identify
 /// the platform in downstream tools. It should be **unique per platform**.
-pub const DEVICE_IDENTIFIER: &str = "TEST_PLATFORM";
+pub const DEVICE_IDENTIFIER: &str = "CNB";
 
 /// Maximum length, in bytes, of any **static** UTF-8 string payload.
 ///
@@ -58,10 +58,7 @@ pub const MAX_HANDLER_RETRIES: usize = 3;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, EnumCount)]
 #[repr(u32)]
 pub enum DataEndpoint {
-    /// On-board storage (e.g. SD card / flash).
-    SdCard,
-    /// Radio or external link (telemetry uplink/downlink).
-    Radio,
+    Serial,
 }
 
 impl DataEndpoint {
@@ -72,8 +69,7 @@ impl DataEndpoint {
     /// external tooling.
     pub fn as_str(self) -> &'static str {
         match self {
-            DataEndpoint::SdCard => "SD_CARD",
-            DataEndpoint::Radio => "RADIO",
+            DataEndpoint::Serial => "Serial",
         }
     }
 }
@@ -98,18 +94,9 @@ impl DataEndpoint {
 pub enum DataType {
     /// Encoded telemetry error text (string payload).
     TelemetryError,
-    /// GPS data (typically 3× `f32`: latitude, longitude, altitude).
-    GpsData,
-    /// IMU data (typically 6× `f32`: accel/gyro vector).
-    ImuData,
-    /// Battery status (e.g. voltage, current, etc.).
-    BatteryStatus,
-    /// Compact system status code (single `u8`).
-    SystemStatus,
-    /// Barometric pressure sensor data.
+    GyroscopeData,
+    AccelerometerData,
     BarometerData,
-    /// Generic string message payload.
-    MessageData,
 }
 
 impl DataType {
@@ -120,12 +107,9 @@ impl DataType {
     pub fn as_str(&self) -> &'static str {
         match self {
             DataType::TelemetryError => "TELEMETRY_ERROR",
-            DataType::GpsData => "GPS_DATA",
-            DataType::ImuData => "IMU_DATA",
-            DataType::BatteryStatus => "BATTERY_STATUS",
-            DataType::SystemStatus => "SYSTEM_STATUS",
+            DataType::GyroscopeData => "GYROSCOPE_DATA",
+            DataType::AccelerometerData => "ACCELEROMETER_DATA",
             DataType::BarometerData => "BAROMETER_DATA",
-            DataType::MessageData => "MESSAGE_DATA",
         }
     }
 }
@@ -146,12 +130,9 @@ impl DataType {
 pub const fn get_message_data_type(data_type: DataType) -> MessageDataType {
     match data_type {
         DataType::TelemetryError => MessageDataType::String,
-        DataType::GpsData => MessageDataType::Float32,
-        DataType::ImuData => MessageDataType::Float32,
-        DataType::BatteryStatus => MessageDataType::Float32,
-        DataType::SystemStatus => MessageDataType::UInt8,
+        DataType::GyroscopeData => MessageDataType::Float32,
+        DataType::AccelerometerData => MessageDataType::Float32,
         DataType::BarometerData => MessageDataType::Float32,
-        DataType::MessageData => MessageDataType::String,
     }
 }
 
@@ -162,12 +143,9 @@ pub const fn get_message_data_type(data_type: DataType) -> MessageDataType {
 pub const fn get_message_info_types(message_type: DataType) -> MessageType {
     match message_type {
         DataType::TelemetryError => MessageType::Error,
-        DataType::GpsData => MessageType::Info,
-        DataType::ImuData => MessageType::Info,
-        DataType::BatteryStatus => MessageType::Info,
-        DataType::SystemStatus => MessageType::Info,
+        DataType::GyroscopeData => MessageType::Info,
+        DataType::AccelerometerData => MessageType::Info,
         DataType::BarometerData => MessageType::Info,
-        DataType::MessageData => MessageType::Info,
     }
 }
 
@@ -182,47 +160,33 @@ pub const fn get_message_info_types(message_type: DataType) -> MessageType {
 /// [`get_message_data_type`].
 pub const fn get_message_meta(data_type: DataType) -> MessageMeta {
     match data_type {
-        DataType::TelemetryError => MessageMeta {
-            // Telemetry Error:
-            // Dynamic string payload (typically human-readable error message).
-            element_count: MessageElementCount::Dynamic,
-            endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-        },
-        DataType::GpsData => MessageMeta {
-            // GPS Data:
-            // 3 × float32 elements (e.g. latitude, longitude, altitude).
-            element_count: MessageElementCount::Static(3),
-            endpoints: &[DataEndpoint::Radio, DataEndpoint::SdCard],
-        },
-        DataType::ImuData => MessageMeta {
-            // IMU Data:
-            // 6 × float32 elements (accel x/y/z and gyro x/y/z).
-            element_count: MessageElementCount::Static(6),
-            endpoints: &[DataEndpoint::Radio, DataEndpoint::SdCard],
-        },
-        DataType::BatteryStatus => MessageMeta {
-            // Battery Status:
-            // 2 × float32 elements (e.g. voltage, current).
-            element_count: MessageElementCount::Static(2),
-            endpoints: &[DataEndpoint::Radio, DataEndpoint::SdCard],
-        },
-        DataType::SystemStatus => MessageMeta {
-            // System Status:
-            // 1 × uint8 element (status/health code).
-            element_count: MessageElementCount::Static(1),
-            endpoints: &[DataEndpoint::SdCard],
-        },
-        DataType::BarometerData => MessageMeta {
-            // Barometer Data:
-            // 3 × float32 elements (e.g. pressure, temperature, altitude/reserved).
-            element_count: MessageElementCount::Static(3),
-            endpoints: &[DataEndpoint::Radio, DataEndpoint::SdCard],
-        },
-        DataType::MessageData => MessageMeta {
-            // Message Data:
-            // Dynamic string payload (e.g. free-form log message).
-            element_count: MessageElementCount::Dynamic,
-            endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-        },
+        DataType::TelemetryError => {
+            MessageMeta {
+                // Telemetry Error
+                element_count: MessageElementCount::Dynamic,
+                endpoints: &[DataEndpoint::Serial],
+            }
+        }
+        DataType::AccelerometerData => {
+            MessageMeta {
+                // System Status
+                element_count: MessageElementCount::Static(3),
+                endpoints: &[DataEndpoint::Serial],
+            }
+        }
+        DataType::GyroscopeData => {
+            MessageMeta {
+                // Barometer Data
+                element_count: MessageElementCount::Static(3),
+                endpoints: &[DataEndpoint::Serial],
+            }
+        }
+        DataType::BarometerData => {
+            MessageMeta {
+                // Message Data
+                element_count: MessageElementCount::Static(3),
+                endpoints: &[DataEndpoint::Serial],
+            }
+        }
     }
 }
