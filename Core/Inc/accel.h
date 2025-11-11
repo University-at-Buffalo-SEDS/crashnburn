@@ -42,16 +42,19 @@ typedef struct {
 
 
 //write 1 byte to a register address
-HAl_StatusTypeDef accel_write_reg(uint8_t reg, uint8_t data, SPI_HandleTypeDef *hspi);
+HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t data);
 
 //read 1 byte from a register address
 HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data);
 
 //Read from multiple registers using auto increment
-HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg, uint8_t *dst, uint16_t len)
+HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg, uint8_t *dst, uint16_t len);
 
 //configure the accelerometer
-HAL_StatusTypeDef accel_config(SPI_HandleTypeDef *hspi;
+HAL_StatusTypeDef accel_config(SPI_HandleTypeDef *hspi);
 
 //Read X axis data
 HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accelData_t *accelData);
+
+//Convert raw accelerometer data to mg
+void convert_raw_accel_to_mg(accelData_t *data, float *x, float *y, float *z);

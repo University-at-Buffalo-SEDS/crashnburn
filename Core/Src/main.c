@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "accel.h"
 #include "gyro.h"
 #include "stm32g4xx_hal.h"
 #include "stm32g4xx_hal_def.h"
@@ -167,7 +168,7 @@ int main(void) {
     }
 
     // accel data
-    st = accel_read(&hspi1, &accel_data)
+    st = accel_read(&hspi1, &accel_data);
     if (st != HAL_OK) {
       die("accel read failed: %d\r\n", st);
     }

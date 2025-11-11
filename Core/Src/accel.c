@@ -1,3 +1,4 @@
+#include "main.h"
 #include "stm32g4xx_hal.h"
 #include "accel.h"
 
@@ -48,11 +49,11 @@ HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg, 
 //configure the accelerometer
 HAL_StatusTypeDef accel_config(SPI_HandleTypeDef *hspi)
 {
-  accel_write_reg(hspi, accel_pwr_ctrl, accel_POWER_ON); //power on
-  HAL_Delay(10)
+  accel_write_reg(hspi, accel_pwr_ctrl, POWER_ON); //power on
+  HAL_Delay(10);
 
   uint8_t data; 
-  HAL_StatusTypeDef status = accel_read_reg(hspi, accel_chip_id_addr, *data);
+  HAL_StatusTypeDef status = accel_read_reg(hspi, accel_chip_id_addr, &data);
 
   if (status != HAL_OK){
     return status;
@@ -62,7 +63,7 @@ HAL_StatusTypeDef accel_config(SPI_HandleTypeDef *hspi)
     return HAL_ERROR;
   }
 
-  HAL_status = accel_write_reg(hspi, accel_reset_addr, 0xB6); //soft reset chip
+  status = accel_write_reg(hspi, accel_reset_addr, 0xB6); //soft reset chip
   HAL_Delay(5);
   accel_write_reg(hspi, accel_range_addr, 0x03); //range set to ±24g
   HAL_Delay(1);
@@ -80,9 +81,9 @@ HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accelData_t *accelData){
   if (status != HAL_OK){
     return status;
   }
-  accelData->x = (int16_t)((uint16_t)(rxBuffer[1] << 8) | rxBuffer[0]; //set struct values to raw data from accel
-  accelData->y = (int16_t)((uint16_t)(rxBuffer[3] << 8) | rxBuffer[2];
-  accelData->z = (int16_t)((uint16_t)(rxBuffer[5] << 8) | rxBuffer[4];
+  accelData->x = (int16_t)((uint16_t)(rxBuffer[1] << 8) | rxBuffer[0]); //set struct values to raw data from accel
+  accelData->y = (int16_t)((uint16_t)(rxBuffer[3] << 8) | rxBuffer[2]);
+  accelData->z = (int16_t)((uint16_t)(rxBuffer[5] << 8) | rxBuffer[4]);
   return HAL_OK;
 }
 
@@ -99,11 +100,11 @@ static float accel_sensitivity_mg_per_lsb(AccelRange range)
 }
 */
 
-float convert_accel_raw_to_mg(accelData_t data, float *x, float *y, float *z){
+void convert_raw_accel_to_mg(accelData_t *data, float *x, float *y, float *z){
   float mg_per_lsb = 24000.0f / 32768.0f;
-  x = data.x * mg_per_lsb;
-  y = data.y * mg_per_lsb;
-  z = data.z * mg_per_lsb;
+  *x = data->x * mg_per_lsb;
+  *y = data->y * mg_per_lsb;
+  *z = data->z * mg_per_lsb;
 }
 
 
