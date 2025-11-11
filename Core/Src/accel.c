@@ -1,5 +1,4 @@
 #include "stm32g4xx_hal.h"
-#include <stdint.h>
 #include "accel.h"
 
 static inline void accel_cs_low(void) {HAL_GPIO_WritePin(accel_CS_GPIO_Port, accel_CS_Pin, GPIO_PIN_RESET);}
@@ -73,20 +72,21 @@ HAL_StatusTypeDef accel_config(SPI_HandleTypeDef *hspi)
   return HAL_OK;
 }
 
+
 //read the accelermoter axis data
 HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accelData_t *accelData){
-  HAL_StatusTypeDef status = accel_read_reg()
-  uint8_t addresses[6] = {accel_x_lsb, accel_x_msb, accel_y_lsb, accel_y_msb, accel_z_lsb, accel_z_msb}
-  int16_t accel_data[3];
-  uint8_t lsb;
-  uint16_t msb;
-  for(i = 0; i < 6; i += 2 ){
-    accel_read_reg(hspi, accel_x_lsb, *lsb);
-    accel_read_reg(hspi, accel_x_msb, *msb);
-    accel_data[] = ((msb << 8) | lsb)
+  uint8_t rxBuffer[6];
+  HAL_StatusTypeDef status = accel_read_buffer(hspi, 0x12, rxBuffer, 6);
+  if (status != HAL_OK){
+    return status;
   }
+  accelData->x = (rxBuffer[1] << 8) | rxBuffer[0]; //set struct values to raw data from accel
+  accelData->y = (rxBuffer[3] << 8) | rxBuffer[2];
+  accelData->z = (rxBuffer[5] << 8) | rxBuffer[4];
   return HAL_OK;
 }
+
+
 
 
 //USE CALLBACK INTERRUPT FOR READING DATA FROM ACCEL IN MAIN.c
