@@ -35,9 +35,9 @@ typedef enum {
 } AccelRange;
 
 typedef struct {
-    uint16_t x;
-    uint16_t y;
-    uint16_t z;
+    int16_t x;
+    int16_t y;
+    int16_t z;
 } accelData_t;
 
 
