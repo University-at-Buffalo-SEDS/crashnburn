@@ -10,7 +10,7 @@ def run(cmd: list[str]) -> None:
 
 def main() -> None:
     project_dir = Path.cwd()
-    build_dir = project_dir / "build" / "Debug"
+    build_dir = project_dir / "build" / "Debug_Script"
 
     # 1) Configure with CMake
     run([
