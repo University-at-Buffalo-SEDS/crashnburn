@@ -1,8 +1,7 @@
-#include "main.h"
-#include "stm32h5xx_hal.h"
+#include "stm32g4xx_hal.h"
 #include "accel.h"
 #include "stdio.h"
-#include "stm32h5xx_hal_def.h"
+#include "stm32g4xx_hal_def.h"
 
 /* Write 1 byte to a register address */
 HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t data){

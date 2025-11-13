@@ -1,7 +1,6 @@
 #pragma once
 #include <stdint.h>
 #include "main.h"
-#include "stm32h5xx_hal_gpio.h"
 
 // REGISTER MAPPING
 #define ACCEL_RESET         0x7E
@@ -27,8 +26,8 @@
 #define ACCEL_CMD_READ(reg)  ((uint8_t)((reg) | 0x80u))
 #define ACCEL_CMD_WRITE(reg) ((uint8_t)((reg) & ~0x80u))
 
-#define ACCEL_CS_LOW()    { HAL_GPIO_WritePin(CS_ACCEL_GPIO_Port, CS_ACCEL_Pin, GPIO_PIN_RESET); }
-#define ACCEL_CS_HIGH()   { HAL_GPIO_WritePin(CS_ACCEL_GPIO_Port, CS_ACCEL_Pin, GPIO_PIN_SET);   }
+#define ACCEL_CS_LOW()    { HAL_GPIO_WritePin(accel_CS_GPIO_Port, accel_CS_Pin, GPIO_PIN_RESET); }
+#define ACCEL_CS_HIGH()   { HAL_GPIO_WritePin(accel_CS_GPIO_Port, accel_CS_Pin, GPIO_PIN_SET);   }
 
 // Type definitions
 
@@ -65,7 +64,7 @@ HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg, 
 HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi);
 
 /* Read X axis data */
-HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accelData_t *accelData);
+HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData);
 
 /* Convert raw accelerometer data to mg */
 void convert_raw_accel_to_mg(accel_data_t *data, float *x, float *y, float *z);
