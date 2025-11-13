@@ -293,7 +293,7 @@ static void SensorTask(void *arg) {
     convert_raw_accel_to_mg(&accel_raw, &accel_vals[0], &accel_vals[1], &accel_vals[2]);
 
     r = log_telemetry_asynchronous(
-        SEDS_DT_ACCEL_DATA, accel_vals,
+        SEDS_DT_ACCELEROMETER_DATA, accel_vals,
         (uint32_t)(sizeof(accel_vals) / sizeof(accel_vals[0])),
         (uint32_t)sizeof(accel_vals[0]));
     if (r != SEDS_OK) {
