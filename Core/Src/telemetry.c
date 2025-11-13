@@ -1,21 +1,36 @@
 #include "telemetry.h"
+#include "FreeRTOS.h"
+#include "cmsis_os2.h"
 #include "sedsprintf.h"
 #include "stm32g4xx_hal.h"
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-// ---- 32->64 bit tick extender so Router's wrapping_sub works correctly ----
+
+void vPrintHeapStats(const char *fmt) {
+  size_t free_now = xPortGetFreeHeapSize();
+  size_t min_ever_free = xPortGetMinimumEverFreeHeapSize();
+
+  size_t total = configTOTAL_HEAP_SIZE; // bytes
+  size_t used_now = total - free_now;
+  size_t max_used = total - min_ever_free;
+
+  printf("=========================\r\n%s\r\nHeap total: %u bytes\r\nHeap used "
+         ": %u bytes\r\nHeap free : %u "
+         "bytes\r\nHeap max used (high-water): %u "
+         "bytes\r\n=========================\r\n",
+         fmt ? fmt : "Heap Stats", (unsigned)total, (unsigned)used_now,
+         (unsigned)free_now, (unsigned)max_used);
+}
+
+/* ---------------- Time helpers: 32->64 extender ---------------- */
 static uint64_t stm_now_ms(void *user) {
   (void)user;
-
-  // Extend 32-bit HAL_GetTick() to a monotonic 64-bit milliseconds counter.
-  // If you might call this from ISRs too, guard the critical section.
   static uint32_t last32 = 0;
   static uint64_t high = 0;
-
   uint32_t cur32 = HAL_GetTick();
   if (cur32 < last32) {
-    // 32-bit wrap occurred (~49.7 days)
     high += (1ULL << 32);
   }
   last32 = cur32;
@@ -23,87 +38,110 @@ static uint64_t stm_now_ms(void *user) {
 }
 
 uint64_t node_now_since_bus_ms(void *user) {
-  const RouterState router = g_router;   // same user passed to TX
-  const uint64_t now = stm_now_ms(NULL); // monotonic ms
-  return (router.r) ? (now - router.start_time) : 0;
+  (void)user;
+  const uint64_t now = stm_now_ms(NULL);
+  const RouterState s = g_router; /* snapshot */
+  return s.r ? (now - s.start_time) : 0;
 }
 
-// Define the global router state here (one definition only)
-RouterState g_router = {.r = NULL, .created = 0};
+/* ---------------- Global router state ---------------- */
+RouterState g_router = {.r = NULL, .created = 0, .start_time = 0};
 
-// --- TX: convert bytes to CAN frames and send via HAL later; stub for now ---
+/* ---------------- TX path (stub/printf/USB) ---------------- */
 SedsResult tx_send(const uint8_t *bytes, size_t len, void *user) {
   (void)user;
   (void)bytes;
   (void)len;
+
+  /* Minimal stub: do nothing and report success.
+     For visibility during bring-up, you can uncomment the printf,
+     but avoid heavy I/O inside the router’s critical path.
+
+  printf("[TX %u]:", (unsigned)len);
+  for (size_t i = 0; i < len; i++) printf(" %02X", bytes[i]);
+  printf("\r\n");
+  */
+
   return SEDS_OK;
 }
 
-// example function that receives the data from the can bus or similar and
-// passes the serialized packet to the router for decoding and handling.
+/* ---------------- RX helpers (optional) ---------------- */
 void rx_synchronous(const uint8_t *bytes, size_t len) {
+  if (!bytes || !len)
+    return;
   if (!g_router.r) {
-    // lazy init if not yet created
     if (init_telemetry_router() != SEDS_OK)
       return;
   }
-  if (!bytes || len == 0)
-    return;
+
   seds_router_receive_serialized(g_router.r, bytes, len);
 }
 
 void rx_asynchronous(const uint8_t *bytes, size_t len) {
+  if (!bytes || !len)
+    return;
   if (!g_router.r) {
-    // lazy init if not yet created
     if (init_telemetry_router() != SEDS_OK)
       return;
   }
-  if (!bytes || len == 0)
-    return;
+
   seds_router_rx_serialized_packet_to_queue(g_router.r, bytes, len);
 }
 
-// --- Simple radio handler ---
+/* ---------------- Local endpoint handler ---------------- */
 SedsResult on_radio_packet(const SedsPacketView *pkt, void *user) {
   (void)user;
-  char buf[1024 * 3];
+
+  /* Keep this lean; avoid big stack buffers. */
+  /* If you need a formatted string, you can cap it. */
+  char buf[seds_pkt_to_string_len(pkt)];
   SedsResult s = seds_pkt_to_string(pkt, buf, sizeof(buf));
-  if (s != SEDS_OK) {
-    printf("on_radio_packet: {seds_pkt_to_string failed: (%d)}\n", s);
-    return s;
+  if (s == SEDS_OK) {
+    printf("on_radio_packet: %s\r\n", buf);
+  } else {
+    printf("on_radio_packet: seds_pkt_to_string failed (%d)\r\n", s);
   }
-  printf("on_radio_packet: %s\n", buf);
-  return SEDS_OK;
+  return s;
 }
 
+/* ---------------- Router init (idempotent) ---------------- */
 SedsResult init_telemetry_router(void) {
+  /* Fast check without lock to avoid needless acquire in the common case. */
+  if (g_router.created && g_router.r)
+    return SEDS_OK;
+
   if (g_router.created && g_router.r) {
     return SEDS_OK;
   }
 
-  // Local endpoint table
   const SedsLocalEndpointDesc locals[] = {
-      {.endpoint = SEDS_EP_RADIO, .packet_handler = on_radio_packet, .user = NULL},
+      {.endpoint = SEDS_EP_SERIAL,
+       .packet_handler = on_radio_packet,
+       .user = NULL},
   };
 
-  SedsRouter *r = seds_router_new(tx_send,
-                                  NULL, // tx_user
-                                  node_now_since_bus_ms, locals,
-                                  sizeof(locals) / sizeof(locals[0]));
+  SedsRouter *r =
+      seds_router_new(tx_send,               /* tx callback */
+                      NULL,                  /* tx_user */
+                      node_now_since_bus_ms, /* clock */
+                      locals, (uint32_t)(sizeof(locals) / sizeof(locals[0])));
 
   if (!r) {
-    printf("Error: failed to create router\n");
+    printf("Error: failed to create router\r\n");
     g_router.r = NULL;
     g_router.created = 0;
+
     return SEDS_ERR;
   }
 
   g_router.r = r;
   g_router.created = 1;
   g_router.start_time = stm_now_ms(NULL);
+
   return SEDS_OK;
 }
 
+/* ---------------- Logging APIs (unchanged) ---------------- */
 SedsResult log_telemetry_synchronous(SedsDataType data_type, const void *data,
                                      size_t element_count,
                                      size_t element_size) {
@@ -114,28 +152,11 @@ SedsResult log_telemetry_synchronous(SedsDataType data_type, const void *data,
   if (!data || element_count == 0 || element_size == 0)
     return SEDS_ERR;
 
-  // total bytes = number of elements * size of each element
   const size_t total_bytes = element_count * element_size;
 
-  return seds_router_log(g_router.r, data_type, data, total_bytes);
-}
+  SedsResult res = seds_router_log(g_router.r, data_type, data, total_bytes);
 
-SedsResult dispatch_tx_queue(void) {
-  if (!g_router.r) {
-    // lazy init if not yet created
-    if (init_telemetry_router() != SEDS_OK)
-      return SEDS_ERR;
-  }
-  return seds_router_process_send_queue(g_router.r);
-}
-
-SedsResult process_rx_queue(void) {
-  if (!g_router.r) {
-    // lazy init if not yet created
-    if (init_telemetry_router() != SEDS_OK)
-      return SEDS_ERR;
-  }
-  return seds_router_process_received_queue(g_router.r);
+  return res;
 }
 
 SedsResult log_telemetry_asynchronous(SedsDataType data_type, const void *data,
@@ -148,31 +169,59 @@ SedsResult log_telemetry_asynchronous(SedsDataType data_type, const void *data,
   if (!data || element_count == 0 || element_size == 0)
     return SEDS_ERR;
 
-  // total bytes = number of elements * size of each element
   const size_t total_bytes = element_count * element_size;
 
-  return seds_router_log_queue(g_router.r, data_type, data, total_bytes);
+  SedsResult res =
+      seds_router_log_queue(g_router.r, data_type, data, total_bytes);
+
+  return res;
 }
 
-// Pump TX for up to `timeout_ms` (0 means "check once, no waiting")
+/* ---------------- Queue processing (unchanged) ---------------- */
+SedsResult dispatch_tx_queue(void) {
+  if (!g_router.r) {
+    if (init_telemetry_router() != SEDS_OK)
+      return SEDS_ERR;
+  }
+
+  SedsResult res = seds_router_process_tx_queue(g_router.r);
+
+  return res;
+}
+
+SedsResult process_rx_queue(void) {
+  if (!g_router.r) {
+    if (init_telemetry_router() != SEDS_OK)
+      return SEDS_ERR;
+  }
+
+  SedsResult res = seds_router_process_rx_queue(g_router.r);
+
+  return res;
+}
+
 SedsResult dispatch_tx_queue_timeout(uint32_t timeout_ms) {
   if (!g_router.r) {
     if (init_telemetry_router() != SEDS_OK)
       return SEDS_ERR;
   }
-  return seds_router_process_tx_queue_with_timeout(
-      g_router.r, /* router */
-      timeout_ms  /* timeout in ms */
-  );
+
+  SedsResult res =
+      seds_router_process_tx_queue_with_timeout(g_router.r, timeout_ms);
+
+  return res;
 }
 
-// Pump RX for up to `timeout_ms`
 SedsResult process_rx_queue_timeout(uint32_t timeout_ms) {
   if (!g_router.r) {
     if (init_telemetry_router() != SEDS_OK)
       return SEDS_ERR;
   }
-  return seds_router_process_rx_queue_with_timeout(g_router.r, timeout_ms);
+
+  SedsResult res =
+      seds_router_process_rx_queue_with_timeout(g_router.r, timeout_ms);
+
+  return res;
 }
 
 SedsResult process_all_queues_timeout(uint32_t timeout_ms) {
@@ -180,31 +229,35 @@ SedsResult process_all_queues_timeout(uint32_t timeout_ms) {
     if (init_telemetry_router() != SEDS_OK)
       return SEDS_ERR;
   }
-  return seds_router_process_all_queues_with_timeout(g_router.r, timeout_ms);
+
+  SedsResult res =
+      seds_router_process_all_queues_with_timeout(g_router.r, timeout_ms);
+
+  return res;
 }
 
+/* ---------------- Error printing ---------------- */
 SedsResult print_telemetry_error(const int32_t error_code) {
+  /* Use a small fixed buffer to avoid big stack frames. */
   char buf[seds_error_to_string_len(error_code)];
-
   SedsResult res = seds_error_to_string(error_code, buf, sizeof(buf));
-  if (res != SEDS_OK) {
-    printf("handle_error: seds_error_to_string failed: %d\n", res);
-    return res;
+  if (res == SEDS_OK) {
+    printf("Error: %s\r\n", buf);
+  } else {
+    printf("Error: seds_error_to_string failed: %d\r\n", res);
   }
-  printf("Error: %s\n", &*buf);
-  return SEDS_OK;
+  return res;
 }
+
+/* ---------------- Fatal helper ---------------- */
 void die(const char *fmt, ...) {
-  char buf[256]; // enough for most debug strings
+  char buf[128];
   va_list args;
   va_start(args, fmt);
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
-
-  // freeze the system so you can see the message in CDC output
   while (1) {
     printf("FATAL: %s\r\n", buf);
-
     HAL_Delay(1000);
   }
 }

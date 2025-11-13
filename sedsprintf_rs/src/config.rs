@@ -1,187 +1,192 @@
-// src/config.rs
-#[allow(dead_code)]
-use core::mem::size_of;
+//! Telemetry configuration and schema description.
+//!
+//! This module defines:
+//! - Device-/build-time constants (identifiers, limits, retries).
+//! - The `DataEndpoint` and `DataType` enums.
+//! - Functions that describe per-type schema metadata:
+//!   - [`get_message_data_type`]
+//!   - [`get_message_info_types`]
+//!   - [`get_message_meta`]
 
+#[allow(unused_imports)]
+use crate::{MessageDataType, MessageElementCount, MessageMeta, MessageType, STRING_VALUE_ELEMENT};
+use strum_macros::EnumCount;
 
-pub const STRING_VALUE_ELEMENTS: usize = 1;
+// -----------------------------------------------------------------------------
+// User-editable configuration
+// -----------------------------------------------------------------------------
 
-//----------------------User Editable----------------------
-pub const DEVICE_IDENTIFIER: &str = "CrashNBurn";
+/// Device identifier string.
+///
+/// This string is attached to every telemetry packet and is used to identify
+/// the platform in downstream tools. It should be **unique per platform**.
+pub const DEVICE_IDENTIFIER: &str = "CNB";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+/// Maximum length, in bytes, of any **static** UTF-8 string payload.
+///
+/// Dynamic string messages may be longer, but many tests and error paths
+/// assume this bound when generating placeholder data.
+pub const MAX_STATIC_STRING_LENGTH: usize = 1024;
+
+/// Maximum length, in bytes, of any **static** hex payload.
+pub const MAX_STATIC_HEX_LENGTH: usize = 1024;
+
+/// Maximum number of fractional digits when converting floating-point values
+/// to strings (e.g., for human-readable error payloads).
+///
+/// Higher values increase both payload size and formatting cost.
+pub const MAX_PRECISION_IN_STRINGS: usize = 8; // 12 is expensive; tune as needed
+
+/// Maximum payload size (in bytes) that is allowed to be allocated on the
+/// stack before the implementation switches to heap allocation.
+pub const MAX_STACK_PAYLOAD_SIZE: usize = 256;
+
+/// Maximum number of times a handler is retried before giving up and
+/// surfacing a [`TelemetryError::HandlerError`](crate::TelemetryError::HandlerError).
+pub const MAX_HANDLER_RETRIES: usize = 3;
+
+// -----------------------------------------------------------------------------
+// Endpoints
+// -----------------------------------------------------------------------------
+
+/// The different destinations where telemetry packets can be sent.
+///
+/// When adding new endpoints:
+/// - Keep the discriminants sequential from `0` with no gaps (if you assign
+///   explicit values).
+/// - Update any tests that iterate over `0..=MAX_VALUE_DATA_ENDPOINT`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, EnumCount)]
 #[repr(u32)]
 pub enum DataEndpoint {
-    SdCard = 0,
-    Radio = 1,
-}
-
-pub const MAX_VALUE_DATA_ENDPOINT: u32 = DataEndpoint::Radio as u32;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
-#[allow(dead_code)]
-pub enum MessageDataType {
-    Float32,
-    UInt8,
-    UInt32,
-    String,
-    Hex,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
-#[allow(dead_code)]
-pub enum MessageType {
-    Info,
-    Error,
+    Serial,
 }
 
 impl DataEndpoint {
-    #[inline]
+    /// Return a stable string representation used in logs and in
+    /// `TelemetryPacket::to_string()` output.
+    ///
+    /// This should remain stable over time for compatibility with tests and
+    /// external tooling.
     pub fn as_str(self) -> &'static str {
         match self {
-            DataEndpoint::SdCard => "SD_CARD",
-            DataEndpoint::Radio => "RADIO",
+            DataEndpoint::Serial => "Serial",
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
-#[repr(u32)]
-/// All data types that can be logged.
-/// Each data type corresponds to a specific message format.
-/// /// When adding new data types, ensure to update MESSAGE_DATA_TYPES,
-/// MESSAGE_INFO_TYPES, MESSAGE_ELEMENTS, and MESSAGE_TYPES accordingly.
-/// These must increase sequentially from 0 without gaps.
-pub enum DataType {
-    TelemetryError = 0,
-    GpsData = 1,
-    GyroscopeData = 2,
-    AccelerometerData = 3,
-    BatteryStatus = 4,
-    SystemStatus = 5,
-    BarometerData = 6,
-    MessageData = 7,
-}
+// -----------------------------------------------------------------------------
+// Data types
+// -----------------------------------------------------------------------------
 
-pub const MAX_VALUE_DATA_TYPE: u32 = DataType::MessageData as u32;
+/// Logical telemetry message kinds.
+///
+/// Each variant corresponds to:
+/// - a concrete payload element type (via [`get_message_data_type`]),
+/// - a message severity/role (via [`get_message_info_types`]),
+/// - schema metadata (via [`get_message_meta`]).
+///
+/// When adding new variants:
+/// - Keep discriminants sequential from `0` with no gaps (if assigning
+///   explicit values).
+/// - Update all mapping functions and any tests that iterate over the enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, EnumCount)]
+#[repr(u32)]
+pub enum DataType {
+    /// Encoded telemetry error text (string payload).
+    TelemetryError,
+    GyroscopeData,
+    AccelerometerData,
+    BarometerData,
+}
 
 impl DataType {
-    pub const COUNT: usize = (MAX_VALUE_DATA_TYPE + 1) as usize;
-
-    #[inline]
-    pub fn as_str(self) -> &'static str {
+    /// Return a stable string representation used in logs, headers, and in
+    /// `TelemetryPacket::to_string()` formatting.
+    ///
+    /// This must be kept up to date when adding new variants.
+    pub fn as_str(&self) -> &'static str {
         match self {
             DataType::TelemetryError => "TELEMETRY_ERROR",
-            DataType::GpsData => "GPS_DATA",
             DataType::GyroscopeData => "GYROSCOPE_DATA",
             DataType::AccelerometerData => "ACCELEROMETER_DATA",
-            DataType::BatteryStatus => "BATTERY_STATUS",
-            DataType::SystemStatus => "SYSTEM_STATUS",
             DataType::BarometerData => "BAROMETER_DATA",
-            DataType::MessageData => "MESSAGE_DATA",
         }
     }
 }
 
-pub const MESSAGE_DATA_TYPES: [MessageDataType; DataType::COUNT] = [
-    MessageDataType::String,
-    MessageDataType::Float32,
-    MessageDataType::Float32,
-    MessageDataType::Float32,
-    MessageDataType::Float32,
-    MessageDataType::UInt8,
-    MessageDataType::Float32,
-    MessageDataType::String,
-];
+// -----------------------------------------------------------------------------
+// Schema helpers: element type, message kind, and metadata
+// -----------------------------------------------------------------------------
 
-pub const MESSAGE_INFO_TYPES: [MessageType; DataType::COUNT] = [
-    MessageType::Error,
-    MessageType::Info,
-    MessageType::Info,
-    MessageType::Info,
-    MessageType::Info,
-    MessageType::Info,
-    MessageType::Info,
-    MessageType::Info,
-];
-
-pub const fn data_type_size(dt: MessageDataType) -> usize {
-    match dt {
-        MessageDataType::Float32 => size_of::<f32>(),
-        MessageDataType::UInt8 => size_of::<u8>(),
-        MessageDataType::UInt32 => size_of::<u32>(),
-        MessageDataType::String => MAX_STRING_LENGTH,
-        MessageDataType::Hex => MAX_HEX_LENGTH,
+/// Return the element type for the payload of a given [`DataType`].
+///
+/// The order and mapping must stay in lock-step with [`DataType`], and with the
+/// schema used by `TelemetryPacket` validation. Available element types are:
+///
+/// - `String`
+/// - `Float32`
+/// - `UInt8`, `UInt16`, `UInt32`, `UInt64`, `UInt128`
+/// - `Int8`, `Int16`, `Int32`, `Int64`, `Int128`
+pub const fn get_message_data_type(data_type: DataType) -> MessageDataType {
+    match data_type {
+        DataType::TelemetryError => MessageDataType::String,
+        DataType::GyroscopeData => MessageDataType::Float32,
+        DataType::AccelerometerData => MessageDataType::Float32,
+        DataType::BarometerData => MessageDataType::Float32,
     }
 }
 
-/// how many elements each message carries
-pub const MESSAGE_ELEMENTS: [usize; DataType::COUNT] = [
-    1,                     // elements int he Telemetry Error data
-    3,                     // elements in the GPS data (lat, lon, alt)
-    3,                     // elements in the Gyroscope data (gyro x,y,z)
-    3,                     // elements in the Accelerometer data (accel x,y,z)
-    4,                     // elements in the Battery Status data
-    2,                     // elements in the System Status data (cpu load, memory usage)
-    3,                     // elements in the Barometer data (pressure, temperature, altitude)
-    STRING_VALUE_ELEMENTS, // elements in the Message Data
-];
-/// Fixed maximum length for the TelemetryError message (bytes, UTF-8).
-pub const MAX_STRING_LENGTH: usize = 1024;
-pub const MAX_HEX_LENGTH: usize = 1024;
-
-/// All message types with their metadata.
-pub const MESSAGE_TYPES: [MessageMeta; DataType::COUNT] = [
-    MessageMeta {
-        data_size: get_needed_message_size(DataType::TelemetryError),
-        endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-    },
-    MessageMeta {
-        data_size: get_needed_message_size(DataType::GpsData),
-        endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-    },
-    MessageMeta {
-        data_size: get_needed_message_size(DataType::GyroscopeData),
-        endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-    },
-    MessageMeta {
-        data_size: get_needed_message_size(DataType::AccelerometerData),
-        endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-    },
-    MessageMeta {
-        data_size: get_needed_message_size(DataType::BatteryStatus),
-        endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-    },
-    MessageMeta {
-        data_size: get_needed_message_size(DataType::SystemStatus),
-        endpoints: &[DataEndpoint::SdCard],
-    },
-    MessageMeta {
-        data_size: get_needed_message_size(DataType::BarometerData),
-        endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-    },
-    MessageMeta {
-        data_size: get_needed_message_size(DataType::MessageData),
-        endpoints: &[DataEndpoint::SdCard, DataEndpoint::Radio],
-    },
-];
-// -------------------------------------------------------------
-
-// ----------------------Not User Editable----------------------
-#[derive(Debug, Clone, Copy)]
-pub struct MessageMeta {
-    pub data_size: usize,
-    pub endpoints: &'static [DataEndpoint],
+/// Return the logical message type (severity/category) for a given [`DataType`].
+///
+/// This affects how messages may be surfaced or filtered in the higher-level
+/// API (e.g. errors vs informational telemetry).
+pub const fn get_message_info_types(message_type: DataType) -> MessageType {
+    match message_type {
+        DataType::TelemetryError => MessageType::Error,
+        DataType::GyroscopeData => MessageType::Info,
+        DataType::AccelerometerData => MessageType::Info,
+        DataType::BarometerData => MessageType::Info,
+    }
 }
 
-#[inline]
-pub fn message_meta(ty: DataType) -> &'static MessageMeta {
-    &MESSAGE_TYPES[ty as usize]
-}
-
-pub const fn get_needed_message_size(ty: DataType) -> usize {
-    data_type_size(MESSAGE_DATA_TYPES[ty as usize]) * MESSAGE_ELEMENTS[ty as usize]
-}
-
-pub const fn get_info_type(ty: DataType) -> MessageType {
-    MESSAGE_INFO_TYPES[ty as usize]
+/// Return the full schema metadata for a given [`DataType`].
+///
+/// Each variant specifies:
+/// - `element_count`: either `Static(n)` (fixed number of elements) or
+///   `Dynamic` (variable-length payload—size validated at runtime).
+/// - `endpoints`: default destination list for packets of that type.
+///
+/// The element count is interpreted relative to the element type returned by
+/// [`get_message_data_type`].
+pub const fn get_message_meta(data_type: DataType) -> MessageMeta {
+    match data_type {
+        DataType::TelemetryError => {
+            MessageMeta {
+                // Telemetry Error
+                element_count: MessageElementCount::Dynamic,
+                endpoints: &[DataEndpoint::Serial],
+            }
+        }
+        DataType::AccelerometerData => {
+            MessageMeta {
+                // System Status
+                element_count: MessageElementCount::Static(3),
+                endpoints: &[DataEndpoint::Serial],
+            }
+        }
+        DataType::GyroscopeData => {
+            MessageMeta {
+                // Barometer Data
+                element_count: MessageElementCount::Static(3),
+                endpoints: &[DataEndpoint::Serial],
+            }
+        }
+        DataType::BarometerData => {
+            MessageMeta {
+                // Message Data
+                element_count: MessageElementCount::Static(3),
+                endpoints: &[DataEndpoint::Serial],
+            }
+        }
+    }
 }

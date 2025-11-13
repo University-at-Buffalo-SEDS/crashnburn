@@ -5,7 +5,13 @@
 /cmake_install.cmake
 .DS_Store
 .idea
+venv/
+__pycache__/
 
 c-system-test/build/
 
 c-example-code/build/
+
+C-Headers/sedsprintf.h
+
+python-files/sedsprintf_rs.pyi
