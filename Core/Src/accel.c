@@ -2,64 +2,63 @@
 #include "accel.h"
 #include "stdio.h"
 #include "stm32g4xx_hal_def.h"
+#include "stm32g4xx_hal_spi.h"
+#include <stdint.h>
+#include <string.h>
 
 /* Write 1 byte to a register address */
-HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t data){
-  uint8_t buffer[2] = {[0] = ACCEL_CMD_WRITE(reg), [1] = data};
-  
+static inline HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi,
+                                                uint8_t reg, uint8_t data) {
+  uint8_t buf[2] = {ACCEL_CMD_WRITE(reg), data};
   ACCEL_CS_LOW();
-  HAL_StatusTypeDef status = HAL_SPI_Transmit(hspi, buffer, sizeof(buffer), HAL_MAX_DELAY);
+  HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, buf, sizeof(buf), HAL_MAX_DELAY);
   ACCEL_CS_HIGH();
-
-  return status;
+  return st;
 }
 
 /* Single Byte Read from given register, must ignore dummy byte */
-HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data){
+static inline HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi,
+                                               uint8_t reg, uint8_t *data) {
   if (!data) return HAL_ERROR;
 
-  uint8_t tx_buffer[3] = {[0] = ACCEL_CMD_READ(reg)};
-  uint8_t rx_buffer[3];
+  uint8_t cmd = ACCEL_CMD_READ(reg);
+  uint8_t rx[2] = {0x00, 0x00};
 
   ACCEL_CS_LOW();
-  HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(hspi, tx_buffer, rx_buffer,
-                                                     sizeof(tx_buffer), HAL_MAX_DELAY); 
+  HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, &cmd, 1, HAL_MAX_DELAY);
+  if (st == HAL_OK) st = HAL_SPI_Receive(hspi, rx, 2, HAL_MAX_DELAY);
   ACCEL_CS_HIGH();
-  if (status != HAL_OK) return status;
-  
-  *data = rx_buffer[2]; // Select last byte as actual info, then store it where the parameters point to
-  return status;
+
+  if (st == HAL_OK) *data = rx[1];
+  return st;
 }
 
 /* Burst read function using auto-increment for BMI-088 */
-HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg,
-                                    uint8_t *dst, uint16_t len) {
+static inline HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi,
+                                                  uint8_t reg, uint8_t *dst, uint16_t len) {
   if (!dst || !len) return HAL_ERROR;
 
-  uint8_t reg_addr = ACCEL_CMD_READ(start_reg);
-  uint8_t dummy = 0x00;
+  uint8_t tx[ACCEL_BUF_SIZE + 1] = {[0] = ACCEL_CMD_BURST(reg)};
+  uint8_t rx[ACCEL_BUF_SIZE + 1];
 
   ACCEL_CS_LOW();
-  HAL_StatusTypeDef status = HAL_SPI_Transmit(hspi, &reg_addr, 1, HAL_MAX_DELAY);
-
-  // DUMMY BYTE HANDLING
-  if (status == HAL_OK) {
-    status = HAL_SPI_TransmitReceive(hspi, &dummy, &dummy, 1, HAL_MAX_DELAY);
-  }
-  if (status == HAL_OK) {
-    status = HAL_SPI_Receive(hspi, dst, len, HAL_MAX_DELAY);
-  }
-
+  HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(rx), HAL_MAX_DELAY);
   ACCEL_CS_HIGH();
-  return status;
+
+  if (st == HAL_OK) memcpy(dst, &rx[1], len);
+  return st;
 }
 
 /* Configure the accelerometer */
 HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
 {
-  HAL_Delay(30);
   HAL_StatusTypeDef status;
-  uint8_t id = 0;
+  uint8_t id = 0x00;
+
+  HAL_Delay(30);
+
+  /* Dummy read */ 
+  status = accel_read_reg(hspi, ACCEL_CHIP_ADDR, &id);
 
   /* WHO_AM_I should be 0x1E at 0x00 (taken directly from Gyro Driver) */ 
   status = accel_read_reg(hspi, ACCEL_CHIP_ADDR, &id);
@@ -77,7 +76,7 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
   /* Power on (enter normal mode) */
   status = accel_write_reg(hspi, ACCEL_POWER_CTRL, POWER_ON);
   if (status != HAL_OK) return status;
-  HAL_Delay(30); 
+  HAL_Delay(500);
 
   /* Set range to ±24g */
   status = accel_write_reg(hspi, ACCEL_RANGE, ACCEL_RANGE_VAL);
@@ -92,17 +91,15 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
 }
 
 /* Read the accelermoter axis data */
-HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData){
-  uint8_t rxBuffer[ACCEL_BUF_SIZE];
-  HAL_StatusTypeDef status = accel_read_buffer(hspi, ACCEL_X_LSB, rxBuffer, ACCEL_BUF_SIZE);
-  if (status != HAL_OK){
-    return status;
-  }
+HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData) {
+  uint8_t buf[ACCEL_BUF_SIZE];
 
-  // Set struct values to raw data from accel
-  accelData->x = (int16_t)((uint16_t)rxBuffer[1] << 8 | rxBuffer[0]);
-  accelData->y = (int16_t)((uint16_t)rxBuffer[3] << 8 | rxBuffer[2]);
-  accelData->z = (int16_t)((uint16_t)rxBuffer[5] << 8 | rxBuffer[4]);
+  HAL_StatusTypeDef st = accel_read_buffer(hspi, ACCEL_X_LSB, buf, ACCEL_BUF_SIZE);
+  if (st != HAL_OK) return st;
+
+  accelData->x = (int16_t)((uint16_t)buf[1] << 8 | buf[0]);
+  accelData->y = (int16_t)((uint16_t)buf[3] << 8 | buf[2]);
+  accelData->z = (int16_t)((uint16_t)buf[5] << 8 | buf[4]);
   return HAL_OK;
 }
 
@@ -124,4 +121,28 @@ void convert_raw_accel_to_mg(accel_data_t *data, float *x, float *y, float *z){
   *x = data->x * mg_per_lsb;
   *y = data->y * mg_per_lsb;
   *z = data->z * mg_per_lsb;
+}
+
+/* Performs self-test, writes data to out, and reinitializes the device. */
+HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out) {
+  accel_data_t data_p;
+  accel_data_t data_n;
+
+  accel_write_reg(hspi, ACCEL_CONF, ACC_TEST_CONF);
+  HAL_Delay(5);
+
+  accel_write_reg(hspi, ACC_SELF_TEST, ACC_POS_POL);
+  HAL_Delay(55);
+  accel_read(hspi, &data_p);
+
+  accel_write_reg(hspi, ACC_SELF_TEST, ACC_NEG_POL);
+  HAL_Delay(55);
+  accel_read(hspi, &data_n);
+
+  accel_write_reg(hspi, ACC_SELF_TEST, ACC_TEST_OFF);
+  out->x = data_p.x - data_n.x;
+  out->y = data_p.y - data_n.y;
+  out->z = data_p.z - data_n.z;
+  
+  return accel_init(hspi);
 }
