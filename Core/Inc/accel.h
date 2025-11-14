@@ -33,6 +33,7 @@
 #define ACC_TEST_WAIT_MS    50
 
 #define ACCEL_CMD_READ(reg)  ((uint8_t)((reg) | 0x80u))
+#define ACCEL_CMD_BURST(reg) ((uint8_t)((reg) | 0xC0u))
 #define ACCEL_CMD_WRITE(reg) ((uint8_t)((reg) & ~0x80u))
 
 #define ACCEL_CS_LOW()    { HAL_GPIO_WritePin(accel_CS_GPIO_Port, accel_CS_Pin, GPIO_PIN_RESET); }
@@ -59,15 +60,6 @@ typedef struct {
 } accel_data_t;
 
 // Functions
-
-/* Write 1 byte to a register address */
-HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t data);
-
-/* Read 1 byte from a register address */
-HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data);
-
-/* Read from multiple registers using auto increment */
-HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg, uint8_t *dst, uint16_t len);
 
 /* Configure the accelerometer */
 HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi);
