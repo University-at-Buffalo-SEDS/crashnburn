@@ -38,7 +38,7 @@ static inline HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi,
                                                   uint8_t reg, uint8_t *dst, uint16_t len) {
   if (!dst || !len) return HAL_ERROR;
 
-  uint8_t tx[ACCEL_BUF_SIZE + 1] = {[0] = ACCEL_CMD_BURST(reg)};
+  uint8_t tx[ACCEL_BUF_SIZE + 1] = {[0] = ACCEL_CMD_READ(reg)};
   uint8_t rx[ACCEL_BUF_SIZE + 1];
 
   ACCEL_CS_LOW();
