@@ -239,7 +239,7 @@ static void SensorTask(void *arg) {
   }
 
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
-  accel_data_t accel_raw = {0.0f, 0.0f, 0.0f};
+  accel_data_t accel_raw = {0};
   gyro_data_t data = {0, 0, 0};
 
   for (;;) {
