@@ -3,6 +3,8 @@
 #include "stdio.h"
 #include "stm32g4xx_hal_def.h"
 #include "stm32g4xx_hal_spi.h"
+#include <stdint.h>
+#include <string.h>
 
 /* Write 1 byte to a register address */
 HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t data){
@@ -36,22 +38,40 @@ HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg,
                                     uint8_t *dst, uint16_t len) {
   if (!dst || !len) return HAL_ERROR;
 
-  uint8_t reg_addr = ACCEL_CMD_READ(start_reg);
-  uint8_t dummy = 0x00;
+  uint8_t tx[8] = {[0] = ACCEL_CMD_READ(start_reg)};
+  memset(&tx[1], 0x00, sizeof(tx) - 1);
+  uint8_t rx[8];
 
   ACCEL_CS_LOW();
-  HAL_StatusTypeDef status = HAL_SPI_Transmit(hspi, &reg_addr, 1, HAL_MAX_DELAY);
-
-  // DUMMY BYTE HANDLING
-  if (status == HAL_OK) {
-    status = HAL_SPI_TransmitReceive(hspi, &dummy, &dummy, 1, HAL_MAX_DELAY);
-  }
-  if (status == HAL_OK) {
-    status = HAL_SPI_Receive(hspi, dst, len, HAL_MAX_DELAY);
-  }
-
+  HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(tx), HAL_MAX_DELAY);
   ACCEL_CS_HIGH();
-  return status;
+
+  if (st == HAL_OK) memcpy(dst, &rx[2], len);
+  return st;
+}
+
+/* Performs self-test, writes data to out, and reinitializes the device. */
+HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out) {
+  accel_data_t data_p;
+  accel_data_t data_n;
+
+  accel_write_reg(hspi, ACCEL_CONF, ACC_TEST_CONF);
+  HAL_Delay(5);
+
+  accel_write_reg(hspi, ACC_SELF_TEST, ACC_POS_POL);
+  HAL_Delay(55);
+  accel_read(hspi, &data_p);
+
+  accel_write_reg(hspi, ACC_SELF_TEST, ACC_NEG_POL);
+  HAL_Delay(55);
+  accel_read(hspi, &data_n);
+
+  accel_write_reg(hspi, ACC_SELF_TEST, ACC_TEST_OFF);
+  out->x = data_p.x - data_n.x;
+  out->y = data_p.y - data_n.y;
+  out->z = data_p.z - data_n.z;
+  
+  return accel_init(hspi);
 }
 
 /* Configure the accelerometer */

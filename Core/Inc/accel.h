@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "main.h"
+#include "stm32g4xx_hal_spi.h"
 
 // REGISTER MAPPING
 #define ACCEL_RESET         0x7E
@@ -8,7 +9,7 @@
 #define ACCEL_CHIP_ID       0x1E
 #define ACCEL_CONF          0x40
 #define ACCEL_POWER_CTRL    0x7D
-#define ACCEL_RANGE         0x41    
+#define ACCEL_RANGE         0x41
 
 #define ACCEL_Z_MSB         0x17
 #define ACCEL_Z_LSB         0x16
@@ -22,6 +23,14 @@
 #define ACCEL_RANGE_VAL     0x03
 #define ACCEL_CONF_VAL      ((0x0A << 4) | 0x0C)
 #define ACCEL_BUF_SIZE      6
+
+// Self-testing
+#define ACC_SELF_TEST       0x6D
+#define ACC_POS_POL         0x0D
+#define ACC_NEG_POL         0x09
+#define ACC_TEST_OFF        0x00
+#define ACC_TEST_CONF       0xA7
+#define ACC_TEST_WAIT_MS    50
 
 #define ACCEL_CMD_READ(reg)  ((uint8_t)((reg) | 0x80u))
 #define ACCEL_CMD_WRITE(reg) ((uint8_t)((reg) & ~0x80u))
@@ -68,3 +77,6 @@ HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData);
 
 /* Convert raw accelerometer data to mg */
 void convert_raw_accel_to_mg(accel_data_t *data, float *x, float *y, float *z);
+
+/* Performs self-test, writes data to out, and reinitializes the device. */
+HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out);
