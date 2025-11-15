@@ -55,9 +55,9 @@ typedef enum {
 } AccelRange;
 
 typedef struct {
-    int16_t x;
-    int16_t y;
-    int16_t z;
+    float x;
+    float y;
+    float z;
 } accel_data_t;
 
 // Functions
@@ -67,9 +67,6 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi);
 
 /* Read X axis data */
 HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData);
-
-/* Convert raw accelerometer data to mg */
-void convert_raw_accel_to_mg(accel_data_t *data, float *x, float *y, float *z);
 
 /* Performs self-test, writes data to out, and reinitializes the device. */
 HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out);

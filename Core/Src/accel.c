@@ -4,7 +4,8 @@
 #include "stm32g4xx_hal_def.h"
 #include "stm32g4xx_hal_spi.h"
 #include <stdint.h>
-#include <string.h>
+
+static const float MG = (float)(1u << (ACCEL_RANGE_VAL + 0x01)) / (float)(1 << 15) * 1.5f;
 
 /* Write 1 byte to a register address */
 static inline HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi,
@@ -82,7 +83,7 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
 }
 
 /* Read the accelermoter axis data */
-HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData) {
+HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *data) {
   uint8_t tx[ACCEL_BUF_SIZE + 1] = {[0] = ACCEL_CMD_READ(ACCEL_X_LSB),
                                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   uint8_t rx[ACCEL_BUF_SIZE + 1];
@@ -91,35 +92,16 @@ HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData) {
   HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(rx), HAL_MAX_DELAY);
   ACCEL_CS_HIGH();
   
+  uint16_t raw[3];
   if (st == HAL_OK) {
-    accelData->x = (int16_t)((rx[2] << 8) | rx[1]);
-    accelData->y = (int16_t)((rx[4] << 8) | rx[3]);
-    accelData->z = (int16_t)((rx[6] << 8) | rx[5]);
+    data->x = (float)(int16_t)((rx[2] << 8) | rx[1]) * MG;
+    data->y = (float)(int16_t)((rx[4] << 8) | rx[3]) * MG;
+    data->z = (float)(int16_t)((rx[6] << 8) | rx[5]) * MG;
   }
   return st;
 }
 
-/*
-static float accel_sensitivity_mg_per_lsb(AccelRange range)
-{
-    switch (range) {
-    case ACCEL_RANGE_3g:  return 10.923f;
-    case ACCEL_RANGE_6g:  return 5.461f;
-    case ACCEL_RANGE_12g:  return 2.730f;
-    case ACCEL_RANGE_24g: return 1.365f;
-    default:                 return 1.365f; // safe fallback
-    }
-}
-*/
-
-void convert_raw_accel_to_mg(accel_data_t *data, float *x, float *y, float *z){
-  float mg_per_lsb = 24000.0f / 32768.0f;
-  *x = data->x * mg_per_lsb;
-  *y = data->y * mg_per_lsb;
-  *z = data->z * mg_per_lsb;
-}
-
-/* Performs self-test, writes data to out, and reinitializes the device. */
+/* Performs self-test, writes raw data to out, and reinitializes the device. */
 HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out) {
   accel_data_t data_p;
   accel_data_t data_n;
@@ -136,9 +118,9 @@ HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out) {
   accel_read(hspi, &data_n);
 
   accel_write_reg(hspi, ACC_SELF_TEST, ACC_TEST_OFF);
-  out->x = data_p.x - data_n.x;
-  out->y = data_p.y - data_n.y;
-  out->z = data_p.z - data_n.z;
+  out->x = (float)(data_p.x - data_n.x);
+  out->y = (float)(data_p.y - data_n.y);
+  out->z = (float)(data_p.z - data_n.z);
   
   return accel_init(hspi);
 }

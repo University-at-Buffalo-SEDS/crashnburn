@@ -239,7 +239,7 @@ static void SensorTask(void *arg) {
   }
 
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
-  accel_data_t accel_raw = {0};
+  accel_data_t accel_vals = {0, 0, 0};
   gyro_data_t data = {0, 0, 0};
 
   for (;;) {
@@ -258,7 +258,7 @@ static void SensorTask(void *arg) {
     }
 
     /* Read accel */
-    st = accel_read(&hspi1, &accel_raw);
+    st = accel_read(&hspi1, &accel_vals);
     if (st != HAL_OK) {
       printf("accel read failed: %d\r\n", st);
     }
@@ -289,13 +289,10 @@ static void SensorTask(void *arg) {
       }
     }
 
-    float accel_vals[3];
-    convert_raw_accel_to_mg(&accel_raw, &accel_vals[0], &accel_vals[1], &accel_vals[2]);
-
     r = log_telemetry_asynchronous(
-        SEDS_DT_ACCELEROMETER_DATA, accel_vals,
-        (uint32_t)(sizeof(accel_vals) / sizeof(accel_vals[0])),
-        (uint32_t)sizeof(accel_vals[0]));
+        SEDS_DT_ACCELEROMETER_DATA, &accel_vals,
+        (uint32_t)(sizeof(accel_vals) / sizeof(accel_vals.x)),
+        (uint32_t)sizeof(accel_vals.x));
     if (r != SEDS_OK) {
       while (1) {
         print_telemetry_error(r);
