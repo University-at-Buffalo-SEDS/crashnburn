@@ -9,6 +9,7 @@
 #define ACCEL_CHIP_ID       0x1E
 #define ACCEL_CONF          0x40
 #define ACCEL_POWER_CTRL    0x7D
+#define ACCEL_POWER_CONF    0x7C
 #define ACCEL_RANGE         0x41
 
 #define ACCEL_Z_MSB         0x17
@@ -21,6 +22,7 @@
 // ACCEL CONFIGS
 #define ACCEL_RESET_VAL     0xB6
 #define ACCEL_RANGE_VAL     0x03
+#define ACCEL_POWER_VAL     0x00
 #define ACCEL_CONF_VAL      ((0x0A << 4) | 0x0C)
 #define ACCEL_BUF_SIZE      6
 

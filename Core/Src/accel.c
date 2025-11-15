@@ -21,31 +21,14 @@ static inline HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi,
                                                uint8_t reg, uint8_t *data) {
   if (!data) return HAL_ERROR;
 
-  uint8_t cmd = ACCEL_CMD_READ(reg);
-  uint8_t rx[2] = {0x00, 0x00};
+  uint8_t tx[3] = {ACCEL_CMD_READ(reg), 0x00, 0x00};
+  uint8_t rx[3] = {0x00, 0x00, 0x00};
 
   ACCEL_CS_LOW();
-  HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, &cmd, 1, HAL_MAX_DELAY);
-  if (st == HAL_OK) st = HAL_SPI_Receive(hspi, rx, 2, HAL_MAX_DELAY);
+  HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(tx), HAL_MAX_DELAY);
   ACCEL_CS_HIGH();
 
-  if (st == HAL_OK) *data = rx[1];
-  return st;
-}
-
-/* Burst read function using auto-increment for BMI-088 */
-static inline HAL_StatusTypeDef accel_read_buffer(SPI_HandleTypeDef *hspi,
-                                                  uint8_t reg, uint8_t *dst, uint16_t len) {
-  if (!dst || !len) return HAL_ERROR;
-
-  uint8_t tx[ACCEL_BUF_SIZE + 1] = {[0] = ACCEL_CMD_READ(reg)};
-  uint8_t rx[ACCEL_BUF_SIZE + 1];
-
-  ACCEL_CS_LOW();
-  HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(rx), HAL_MAX_DELAY);
-  ACCEL_CS_HIGH();
-
-  if (st == HAL_OK) memcpy(dst, &rx[1], len);
+  if (st == HAL_OK) *data = rx[2];
   return st;
 }
 
@@ -55,7 +38,15 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
   HAL_StatusTypeDef status;
   uint8_t id = 0x00;
 
-  HAL_Delay(30);
+  ACCEL_CS_LOW();
+  HAL_Delay(1);
+  ACCEL_CS_HIGH();
+  HAL_Delay(50);
+
+  /* Soft reset */
+  status = accel_write_reg(hspi, ACCEL_RESET, ACCEL_RESET_VAL);
+  if (status != HAL_OK) return status;
+  HAL_Delay(50);
 
   /* Dummy read */ 
   status = accel_read_reg(hspi, ACCEL_CHIP_ADDR, &id);
@@ -68,39 +59,44 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
     return HAL_ERROR;
   }
 
-  /* Soft reset */
-  status = accel_write_reg(hspi, ACCEL_RESET, ACCEL_RESET_VAL);
+  /* Bandwith of low pass filter config to normal and ODR set to 1600hz */
+  status = accel_write_reg(hspi, ACCEL_CONF, ACCEL_CONF_VAL);
   if (status != HAL_OK) return status;
-  HAL_Delay(30);
+
+  /* Enable active mode */
+  status = accel_write_reg(hspi, ACCEL_POWER_CONF, ACCEL_POWER_VAL);
+  if (status != HAL_OK) return status;
+  HAL_Delay(50);
 
   /* Power on (enter normal mode) */
   status = accel_write_reg(hspi, ACCEL_POWER_CTRL, POWER_ON);
   if (status != HAL_OK) return status;
-  HAL_Delay(500);
+  HAL_Delay(450);
 
   /* Set range to ±24g */
   status = accel_write_reg(hspi, ACCEL_RANGE, ACCEL_RANGE_VAL);
   if (status != HAL_OK) return status;
   HAL_Delay(30);
 
-  /* Bandwith of low pass filter config to normal and ODR set to 1600hz */
-  status = accel_write_reg(hspi, ACCEL_CONF, ACCEL_CONF_VAL);
-  if (status != HAL_OK) return status;
-
   return HAL_OK;
 }
 
 /* Read the accelermoter axis data */
 HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData) {
-  uint8_t buf[ACCEL_BUF_SIZE];
+  uint8_t tx[ACCEL_BUF_SIZE + 1] = {[0] = ACCEL_CMD_READ(ACCEL_X_LSB),
+                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  uint8_t rx[ACCEL_BUF_SIZE + 1];
 
-  HAL_StatusTypeDef st = accel_read_buffer(hspi, ACCEL_X_LSB, buf, ACCEL_BUF_SIZE);
-  if (st != HAL_OK) return st;
-
-  accelData->x = (int16_t)((uint16_t)buf[1] << 8 | buf[0]);
-  accelData->y = (int16_t)((uint16_t)buf[3] << 8 | buf[2]);
-  accelData->z = (int16_t)((uint16_t)buf[5] << 8 | buf[4]);
-  return HAL_OK;
+  ACCEL_CS_LOW();
+  HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(rx), HAL_MAX_DELAY);
+  ACCEL_CS_HIGH();
+  
+  if (st == HAL_OK) {
+    accelData->x = (int16_t)((rx[2] << 8) | rx[1]);
+    accelData->y = (int16_t)((rx[4] << 8) | rx[3]);
+    accelData->z = (int16_t)((rx[6] << 8) | rx[5]);
+  }
+  return st;
 }
 
 /*
