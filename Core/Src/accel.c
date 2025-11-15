@@ -92,7 +92,6 @@ HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *data) {
   HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(rx), HAL_MAX_DELAY);
   ACCEL_CS_HIGH();
   
-  uint16_t raw[3];
   if (st == HAL_OK) {
     data->x = (float)(int16_t)((rx[2] << 8) | rx[1]) * MG;
     data->y = (float)(int16_t)((rx[4] << 8) | rx[3]) * MG;
