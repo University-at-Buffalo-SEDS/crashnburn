@@ -5,8 +5,6 @@
 #include "stm32g4xx_hal_spi.h"
 #include <stdint.h>
 
-static const float MG = (float)(1u << (ACCEL_RANGE_VAL + 0x01)) / (float)(1 << 15) * 1.5f;
-
 /* Write 1 byte to a register address */
 static inline HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi,
                                                 uint8_t reg, uint8_t data) {
@@ -93,9 +91,9 @@ HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *data) {
   ACCEL_CS_HIGH();
   
   if (st == HAL_OK) {
-    data->x = (float)(int16_t)((rx[2] << 8) | rx[1]) * MG;
-    data->y = (float)(int16_t)((rx[4] << 8) | rx[3]) * MG;
-    data->z = (float)(int16_t)((rx[6] << 8) | rx[5]) * MG;
+    data->x = (float)((rx[2] << 8) | rx[1]) * MG;
+    data->y = (float)((rx[4] << 8) | rx[3]) * MG;
+    data->z = (float)((rx[6] << 8) | rx[5]) * MG;
   }
   return st;
 }
