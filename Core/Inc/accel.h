@@ -24,7 +24,7 @@
 #define ACCEL_RANGE_VAL     0x03
 #define ACCEL_POWER_VAL     0x00
 #define ACCEL_CONF_VAL      ((0x0A << 4) | 0x0C)
-#define ACCEL_BUF_SIZE      6
+#define ACCEL_BUF_SIZE      8
 
 // Self-testing
 #define ACC_SELF_TEST       0x6D
