@@ -82,18 +82,18 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
 
 /* Read the accelermoter axis data */
 HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *data) {
-  uint8_t tx[ACCEL_BUF_SIZE + 1] = {[0] = ACCEL_CMD_READ(ACCEL_X_LSB),
+  uint8_t tx[ACCEL_BUF_SIZE + 2] = {[0] = ACCEL_CMD_READ(ACCEL_X_LSB),
                                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  uint8_t rx[ACCEL_BUF_SIZE + 1];
+  uint8_t rx[ACCEL_BUF_SIZE + 2];
 
   ACCEL_CS_LOW();
   HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(rx), HAL_MAX_DELAY);
   ACCEL_CS_HIGH();
   
   if (st == HAL_OK) {
-    data->x = (float)((rx[2] << 8) | rx[1]) * MG;
-    data->y = (float)((rx[4] << 8) | rx[3]) * MG;
-    data->z = (float)((rx[6] << 8) | rx[5]) * MG;
+    data->x = (float)((rx[3] << 8) | rx[2]) * MG;
+    data->y = (float)((rx[5] << 8) | rx[4]) * MG;
+    data->z = (float)((rx[7] << 8) | rx[6]) * MG;
   }
   return st;
 }
