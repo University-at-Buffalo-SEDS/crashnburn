@@ -21,7 +21,7 @@ static inline HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi,
   if (!data) return HAL_ERROR;
 
   uint8_t tx[3] = {ACCEL_CMD_READ(reg), 0x00, 0x00};
-  uint8_t rx[3] = {0x00, 0x00, 0x00};
+  uint8_t rx[3];
 
   ACCEL_CS_LOW();
   HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(tx), HAL_MAX_DELAY);
@@ -59,21 +59,21 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
   }
 
   /* Bandwith of low pass filter config to normal and ODR set to 1600hz */
-  status = accel_write_reg(hspi, ACCEL_CONF, ACCEL_CONF_VAL);
+  status = accel_write_reg(hspi, ACCEL_CONF, NORMAL_1600HZ);
   if (status != HAL_OK) return status;
 
   /* Enable active mode */
-  status = accel_write_reg(hspi, ACCEL_POWER_CONF, ACCEL_POWER_VAL);
+  status = accel_write_reg(hspi, ACCEL_PWR_CONF, ACTIVE_MODE);
   if (status != HAL_OK) return status;
   HAL_Delay(50);
 
   /* Power on (enter normal mode) */
-  status = accel_write_reg(hspi, ACCEL_POWER_CTRL, POWER_ON);
+  status = accel_write_reg(hspi, ACCEL_PWR_CTRL, ACCEL_ON);
   if (status != HAL_OK) return status;
   HAL_Delay(450);
 
   /* Set range to ±24g */
-  status = accel_write_reg(hspi, ACCEL_RANGE, ACCEL_RANGE_VAL);
+  status = accel_write_reg(hspi, ACCEL_RANGE, ACCEL_RANGE_24g);
   if (status != HAL_OK) return status;
   HAL_Delay(30);
 
@@ -103,18 +103,18 @@ HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out) {
   accel_data_t data_p;
   accel_data_t data_n;
 
-  accel_write_reg(hspi, ACCEL_CONF, ACC_TEST_CONF);
+  accel_write_reg(hspi, ACCEL_CONF, ACCEL_TEST_CONF);
   HAL_Delay(5);
 
-  accel_write_reg(hspi, ACC_SELF_TEST, ACC_POS_POL);
+  accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_POS_POL);
   HAL_Delay(55);
   accel_read(hspi, &data_p);
 
-  accel_write_reg(hspi, ACC_SELF_TEST, ACC_NEG_POL);
+  accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_NEG_POL);
   HAL_Delay(55);
   accel_read(hspi, &data_n);
 
-  accel_write_reg(hspi, ACC_SELF_TEST, ACC_TEST_OFF);
+  accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_TEST_OFF);
   out->x = (float)(data_p.x - data_n.x);
   out->y = (float)(data_p.y - data_n.y);
   out->z = (float)(data_p.z - data_n.z);
