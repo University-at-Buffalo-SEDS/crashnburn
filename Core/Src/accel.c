@@ -1,9 +1,13 @@
-#include "stm32g4xx_hal.h"
+/*
+ * Synchronous accelerometer driver over SPI.
+ */
+
+#include <stdint.h>
 #include "accel.h"
 #include "stdio.h"
+#include "stm32g4xx_hal.h"
 #include "stm32g4xx_hal_def.h"
 #include "stm32g4xx_hal_spi.h"
-#include <stdint.h>
 
 /* Write 1 byte to a register address */
 static inline HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi,
@@ -47,7 +51,7 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
   if (status != HAL_OK) return status;
   HAL_Delay(50);
 
-  /* Dummy read */ 
+  /* Dummy read (result ignored) */ 
   status = accel_read_reg(hspi, ACCEL_CHIP_ADDR, &id);
 
   /* WHO_AM_I should be 0x1E at 0x00 (taken directly from Gyro Driver) */ 
@@ -100,21 +104,31 @@ HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *data) {
 
 /* Performs self-test, writes raw data to out, and reinitializes the device. */
 HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out) {
+  HAL_StatusTypeDef st;
   accel_data_t data_p;
   accel_data_t data_n;
 
-  accel_write_reg(hspi, ACCEL_CONF, ACCEL_TEST_CONF);
+  st = accel_write_reg(hspi, ACCEL_CONF, ACCEL_TEST_CONF);
+  if (st != HAL_OK) return st;
   HAL_Delay(5);
 
-  accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_POS_POL);
+  st = accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_POS_POL);
+  if (st != HAL_OK) return st;
   HAL_Delay(55);
-  accel_read(hspi, &data_p);
 
-  accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_NEG_POL);
+  st = accel_read(hspi, &data_p);
+  if (st != HAL_OK) return st;
+
+  st = accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_NEG_POL);
+  if (st != HAL_OK) return st;
   HAL_Delay(55);
-  accel_read(hspi, &data_n);
 
-  accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_TEST_OFF);
+  st = accel_read(hspi, &data_n);
+  if (st != HAL_OK) return st;
+
+  st = accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_TEST_OFF);
+  if (st != HAL_OK) return st;
+
   out->x = (float)(data_p.x - data_n.x);
   out->y = (float)(data_p.y - data_n.y);
   out->z = (float)(data_p.z - data_n.z);

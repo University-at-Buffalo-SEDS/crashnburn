@@ -1,3 +1,7 @@
+/*
+ * Synchronous accelerometer driver over SPI.
+ */
+
 #pragma once
 #include <stdint.h>
 #include "main.h"
@@ -56,17 +60,19 @@ typedef struct {
 #define ACCEL_X_MSB         0x13
 #define ACCEL_X_LSB         0x12
 
-// Configs
+// Constants
 #define ACCEL_RESET_VAL     0xB6
 #define ACCEL_BUF_SIZE      8
 
-// Self-testing
+// Self-test constants
 #define ACCEL_SELF_TEST     0x6D
 #define ACCEL_POS_POL       0x0D
 #define ACCEL_NEG_POL       0x09
 #define ACCEL_TEST_OFF      0x00
 #define ACCEL_TEST_CONF     0xA7
 #define ACCEL_TEST_WAIT_MS  50
+
+// Helper definitions
 
 #define MG ((float)(1 << (ACCEL_RANGE_24g + 0x01)) / 32768.0f * 1.5f)
 
@@ -81,8 +87,8 @@ typedef struct {
 /* Configure the accelerometer */
 HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi);
 
-/* Read X axis data */
+/* Read acceleration data and convert it to milligravity */
 HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *accelData);
 
-/* Performs self-test, writes data to out, and reinitializes the device. */
+/* Perform self-test, write readings to out, and reinitialize accelerometer. */
 HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out);
