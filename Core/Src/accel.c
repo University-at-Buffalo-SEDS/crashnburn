@@ -19,7 +19,7 @@ static inline HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi,
   return st;
 }
 
-/* Single Byte Read from given register, must ignore dummy byte */
+/* Single byte read from given register, must ignore dummy byte */
 static inline HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi,
                                                uint8_t reg, uint8_t *data) {
   if (!data) return HAL_ERROR;
@@ -84,7 +84,7 @@ HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
   return HAL_OK;
 }
 
-/* Read the accelermoter axis data */
+/* Read the accelermoter axes data */
 HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *data) {
   uint8_t tx[ACCEL_BUF_SIZE] = {[0] = ACCEL_CMD_READ(ACCEL_X_LSB),
                                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -102,7 +102,7 @@ HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *data) {
   return st;
 }
 
-/* Performs self-test, writes raw data to out, and reinitializes the device. */
+/* Perform self-test, write raw data to out, and reinitialize accelerometer */
 HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out) {
   HAL_StatusTypeDef st;
   accel_data_t data_p;
