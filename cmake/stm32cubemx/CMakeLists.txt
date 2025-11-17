@@ -33,6 +33,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/app_freertos.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/gyro.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/accel.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/telemetry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/barometer.c    
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/telemetry_hooks.c    

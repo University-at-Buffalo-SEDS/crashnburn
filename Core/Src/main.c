@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "FreeRTOS.h"
+#include "accel.h"
 #include "barometer.h"
 #include "cmsis_os2.h"
 #include "gyro.h"
@@ -59,8 +60,8 @@ osThreadId_t TaskHandles[2];
 */
 enum {
   STACK_DEFAULT = 512,
-  STACK_SENSOR = 1024 * 4,
-  STACK_DISPATCH = 1024 * 8
+  STACK_SENSOR = 1024 * 16,
+  STACK_DISPATCH = 1024 * 32
 };
 
 static const osThreadAttr_t sensorTask_attributes = {
@@ -233,8 +234,12 @@ static void SensorTask(void *arg) {
   if (init_barometer(&hspi1) != HAL_OK) {
     die("barometer init failed\r\n");
   }
+  if (accel_init(&hspi1) != HAL_OK) {
+    die("accel init failed\r\n");
+  }
 
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
+  accel_data_t accel_vals = {0, 0, 0};
   gyro_data_t data = {0, 0, 0};
 
   for (;;) {
@@ -250,6 +255,12 @@ static void SensorTask(void *arg) {
     st = gyro_read(&hspi1, &data);
     if (st != HAL_OK) {
       printf("gyro read failed: %d\r\n", st);
+    }
+
+    /* Read accel */
+    st = accel_read(&hspi1, &accel_vals);
+    if (st != HAL_OK) {
+      printf("accel read failed: %d\r\n", st);
     }
 
     /* Log telemetry (async) */
@@ -272,6 +283,16 @@ static void SensorTask(void *arg) {
         SEDS_DT_GYROSCOPE_DATA, gyro_vals,
         (uint32_t)(sizeof(gyro_vals) / sizeof(gyro_vals[0])),
         (uint32_t)sizeof(gyro_vals[0]));
+    if (r != SEDS_OK) {
+      while (1) {
+        print_telemetry_error(r);
+      }
+    }
+
+    r = log_telemetry_asynchronous(
+        SEDS_DT_ACCELEROMETER_DATA, &accel_vals,
+        (uint32_t)(sizeof(accel_vals) / sizeof(accel_vals.x)),
+        (uint32_t)sizeof(accel_vals.x));
     if (r != SEDS_OK) {
       while (1) {
         print_telemetry_error(r);
