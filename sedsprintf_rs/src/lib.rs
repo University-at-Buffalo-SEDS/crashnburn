@@ -150,7 +150,6 @@ impl_repr_u32_enum!(DataEndpoint, MAX_VALUE_DATA_ENDPOINT);
 // ============================================================================
 
 /// Describes how many elements are present for a given message type.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum MessageElementCount {
     /// Fixed number of elements.
@@ -159,6 +158,12 @@ pub enum MessageElementCount {
     Dynamic,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum EndpointsBroadcastMode {
+    Always,
+    Never,
+    Default,
+}
 /// Static metadata for a message type: element count and valid endpoints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct MessageMeta {
@@ -182,7 +187,8 @@ pub fn message_meta(ty: DataType) -> MessageMeta {
 
 impl Mul<MessageElementCount> for usize {
     type Output = usize;
-
+    
+    #[inline]
     fn mul(self, rhs: MessageElementCount) -> usize {
         self * rhs.into()
     }
@@ -191,6 +197,7 @@ impl Mul<MessageElementCount> for usize {
 impl Mul<usize> for MessageElementCount {
     type Output = usize;
 
+    #[inline]
     fn mul(self, rhs: usize) -> usize {
         self.into() * rhs
     }
@@ -201,6 +208,7 @@ impl MessageElementCount {
     ///
     /// - `Static(n)` → `n`
     /// - `Dynamic`   → `0` (caller must handle dynamic sizing separately)
+    #[inline]
     fn into(self) -> usize {
         match self {
             MessageElementCount::Static(a) => a,
@@ -244,6 +252,15 @@ pub const fn get_data_type(ty: DataType) -> MessageDataType {
     get_message_data_type(ty)
 }
 
+/// Return the default endpoints for a given `DataType`.
+/// # Arguments
+/// - `ty`: Logical data type to query.
+/// # Returns
+/// - Slice of allowed `DataEndpoint` values.
+#[inline]
+pub const fn endpoints_from_datatype(ty: DataType) -> &'static [DataEndpoint] {
+    get_message_meta(ty).endpoints
+}
 /// Primitive element type used by a message.
 ///
 /// This is the underlying "slot" type, not the high-level `DataType`
@@ -266,6 +283,7 @@ pub enum MessageDataType {
     Bool,
     String,
     Binary,
+    NoData,
 }
 
 /// Size in bytes of a single element for the given [`MessageDataType`].
@@ -294,6 +312,7 @@ pub const fn data_type_size(dt: MessageDataType) -> usize {
         MessageDataType::Bool => size_of::<bool>(),
         MessageDataType::String => MAX_STATIC_STRING_LENGTH,
         MessageDataType::Binary => MAX_STATIC_HEX_LENGTH,
+        MessageDataType::NoData => 0,
     }
 }
 

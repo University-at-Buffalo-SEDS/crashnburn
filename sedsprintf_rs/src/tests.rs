@@ -31,6 +31,7 @@ fn test_payload_len_for(ty: DataType) -> usize {
                         | MessageDataType::Float64 => 8,
                         MessageDataType::UInt128 | MessageDataType::Int128 => 16,
                         MessageDataType::String | MessageDataType::Binary => 1,
+                        MessageDataType::NoData => 0,
                     };
                     let elems = get_message_meta(ty).element_count.into().max(1);
                     w * elems
@@ -525,7 +526,7 @@ mod handler_failure_tests {
         )
         .unwrap();
 
-        handle_errors(router.transmit_message(&pkt));
+        handle_errors(router.tx(&pkt));
 
         // The capturing handler should have seen the original packet and then the error packet.
         assert!(
@@ -588,7 +589,7 @@ mod handler_failure_tests {
         )
         .unwrap();
 
-        handle_errors(router.transmit_message(&pkt));
+        handle_errors(router.tx(&pkt));
 
         assert!(
             saw_error.load(Ordering::SeqCst) >= 1,
@@ -1281,7 +1282,7 @@ mod tests_extra {
         )
         .unwrap();
 
-        r.transmit_message_queue(pkt_tx).unwrap();
+        r.tx_queue(pkt_tx).unwrap();
         r.rx_packet_to_queue(pkt_rx).unwrap();
 
         // Clearing should drop both queues before any processing.
@@ -1339,7 +1340,7 @@ mod tests_extra {
         .unwrap();
 
         // Sending should surface a HandlerError after all retries.
-        let res = r.transmit_message(&pkt);
+        let res = r.tx(&pkt);
         match res {
             Err(TelemetryError::HandlerError(_)) => {}
             other => panic!("expected HandlerError after retries, got {other:?}"),
@@ -1372,6 +1373,20 @@ mod tests_extra {
 
         assert_eq!(pkt.payload().len(), 12);
         assert_eq!(pkt.data_size(), 12);
+        assert_eq!(pkt.timestamp(), 12345);
+    }
+
+    #[test]
+    fn from_none_slice_builds_valid_packet() {
+        let need = 0; // f32 count
+        assert_eq!(need, 0); // schema sanity
+
+        let pkt =
+            TelemetryPacket::from_no_data(DataType::Heartbeat, &[DataEndpoint::SdCard], 12345)
+                .unwrap();
+
+        assert_eq!(pkt.payload().len(), 0);
+        assert_eq!(pkt.data_size(), 0);
         assert_eq!(pkt.timestamp(), 12345);
     }
 
@@ -1445,7 +1460,7 @@ mod tests_extra {
         )
         .unwrap();
 
-        let res = r.transmit_message(&pkt);
+        let res = r.tx(&pkt);
         match res {
             Err(TelemetryError::HandlerError(_)) => {} // TX path wraps as HandlerError
             other => panic!("expected HandlerError from TX failure, got {other:?}"),
@@ -1515,6 +1530,7 @@ mod tests_more {
                     }
                     MessageDataType::UInt128 | MessageDataType::Int128 => 16,
                     MessageDataType::String | MessageDataType::Binary => 1,
+                    MessageDataType::NoData => 0,
                 };
                 let elems = get_message_meta(ty).element_count.into().max(1);
                 core::cmp::max(1, w * elems)
@@ -1616,7 +1632,7 @@ mod tests_more {
             BoardConfig::new(vec![handler]),
             zero_clock(),
         );
-        r.receive_serialized(&wire).unwrap();
+        r.rx_serialized(&wire).unwrap();
         assert_eq!(called.load(Ordering::SeqCst), 1);
     }
 
@@ -1654,7 +1670,7 @@ mod tests_more {
             zero_clock(),
         );
 
-        r.receive_serialized(&wire).unwrap();
+        r.rx_serialized(&wire).unwrap();
         assert_eq!(packet_called.load(Ordering::SeqCst), 1);
         assert_eq!(serialized_called.load(Ordering::SeqCst), 1);
     }
@@ -1689,7 +1705,7 @@ mod tests_more {
             0,
         )
         .unwrap();
-        r.transmit_message(&pkt).unwrap();
+        r.tx(&pkt).unwrap();
 
         assert_eq!(tx_called.load(Ordering::SeqCst), 0);
         assert_eq!(hits.load(Ordering::SeqCst), 1);
@@ -1718,7 +1734,7 @@ mod tests_more {
             0,
         )
         .unwrap();
-        r.receive(&pkt).unwrap();
+        r.rx(&pkt).unwrap();
 
         assert_eq!(called.load(Ordering::SeqCst), 1);
     }
@@ -1754,7 +1770,7 @@ mod tests_more {
             1,
         )
         .unwrap();
-        let _ = r.transmit_message(&pkt);
+        let _ = r.tx(&pkt);
 
         let s = captured.lock().unwrap().clone();
         assert!(!s.is_empty());
@@ -1790,7 +1806,6 @@ mod tests_more {
         for i in 0..=MAX_VALUE_DATA_TYPE {
             if let Some(ty) = DataType::try_from_u32(i) {
                 let len = test_payload_len_for(ty);
-                assert!(len > 0, "test payload length must be > 0 for {ty:?}");
 
                 match get_data_type(ty) {
                     MessageDataType::String | MessageDataType::Binary => {
@@ -1811,7 +1826,16 @@ mod tests_more {
                             | MessageDataType::Float64 => 8,
                             MessageDataType::UInt128 | MessageDataType::Int128 => 16,
                             MessageDataType::String | MessageDataType::Binary => 1,
+                            MessageDataType::NoData => 0,
                         };
+                        if width == 0 {
+                            // NoData must have zero length
+                            assert_eq!(
+                                len, 0,
+                                "NoData type must have zero-length payload for {ty:?}"
+                            );
+                            return;
+                        }
                         assert_eq!(
                             len % width,
                             0,
@@ -2062,7 +2086,7 @@ mod concurrency_tests {
             threads_vec.push(thread::spawn(move || {
                 for _ in 0..ITERS_PER_THREAD {
                     r_cloned
-                        .receive_serialized(&w_cloned)
+                        .rx_serialized(&w_cloned)
                         .expect("receive_serialized failed");
                 }
             }));
@@ -2236,12 +2260,11 @@ mod concurrency_tests {
             LOG_ITERS + RX_ITERS,
             "expected {LOG_ITERS}+{RX_ITERS} handler invocations"
         );
-
     }
 }
-mod data_conversion_types{
+mod data_conversion_types {
 
-        // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
     // TelemetryPacket typed data accessors
     // ---------------------------------------------------------------------------
 
@@ -2255,8 +2278,7 @@ mod data_conversion_types{
         let eps = &[DataEndpoint::SdCard, DataEndpoint::Radio];
         let src = [1.5_f32, -2.25, 3.0];
 
-        let pkt =
-            TelemetryPacket::from_f32_slice(DataType::GpsData, &src, eps, 42).unwrap();
+        let pkt = TelemetryPacket::from_f32_slice(DataType::GpsData, &src, eps, 42).unwrap();
         let vals = pkt.data_as_f32().unwrap();
 
         assert_eq!(vals, src);
@@ -2269,8 +2291,7 @@ mod data_conversion_types{
         let eps = &[DataEndpoint::SdCard];
         let src = [1.0_f32, 2.0, 3.0];
 
-        let pkt =
-            TelemetryPacket::from_f32_slice(DataType::GpsData, &src, eps, 0).unwrap();
+        let pkt = TelemetryPacket::from_f32_slice(DataType::GpsData, &src, eps, 0).unwrap();
 
         let res = pkt.data_as_u16();
         match res {
@@ -2303,10 +2324,8 @@ mod data_conversion_types{
         let eps = &[DataEndpoint::SdCard];
         let vals = [true, false, true, true, false];
 
-        let pkt =
-            TelemetryPacket::from_bool_slice(bool_ty, &vals, eps, 0).unwrap();
+        let pkt = TelemetryPacket::from_bool_slice(bool_ty, &vals, eps, 0).unwrap();
         let decoded = pkt.data_as_bool().unwrap();
         assert_eq!(decoded, vals);
     }
-
 }
