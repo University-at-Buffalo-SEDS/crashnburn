@@ -20,7 +20,28 @@ use crate::EndpointsBroadcastMode;
 ///
 /// This string is attached to every telemetry packet and is used to identify
 /// the platform in downstream tools. It should be **unique per platform**.
-pub const DEVICE_IDENTIFIER: &str = "CNB";
+pub const DEVICE_IDENTIFIER: &str = match option_env!("DEVICE_IDENTIFIER") {
+    Some(val) => val,
+    None => "TEST_PLATFORM",
+};
+
+/// Maximum number of recent received packet IDs to track for duplicate
+/// detection.
+///
+/// Higher values increase memory usage but improve duplicate detection for
+/// high-throughput links or bursty traffic patterns.
+// This value should be a power of two for optimal performance.
+pub const MAX_RECENT_RX_IDS: usize = 128;
+
+/// Starting size of the internal router and relay queues.
+pub const STARTING_QUEUE_SIZE: usize = 16;
+
+
+/// Minimum payload size (in bytes) before we consider compression.
+pub const PAYLOAD_COMPRESS_THRESHOLD: usize = 16;
+
+/// Compression level to use when compressing telemetry payloads (0-10).
+pub const PAYLOAD_COMPRESSION_LEVEL: u8 = 10;
 
 /// Maximum length, in bytes, of any **static** UTF-8 string payload.
 ///

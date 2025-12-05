@@ -1,6 +1,26 @@
 # SEDSPRINTF_RS
 
-An implementation of the `sedsprintf` library in Rust.
+An implementation of the `sedsprintf` telemetry protocol in Rust.
+
+---
+
+## About
+
+This library started out as a rewrite of the original sedsprintf C library
+found [here](https://github.com/University-at-Buffalo-SEDS/sedsprintf).
+
+After the initial rewrite, many improvements were made to the rust implementation including better safety, easier
+extension, and improved performance.
+This caused the C++ implementation to be rewritten to keep feature parity with the rust version.
+After about of month of this, we decided that we were no longer going to use the C++ version, and thus the project was 
+archived and is no longer being maintained.
+With the Rust version being the sole implementation, we have continued to improve it and add new features like python
+bindings, packet compression, and a bitmap for endpoints to further reduce packet size.
+This library is now being used in multiple projects including embedded code on the rocket and on the rust based ground
+station. Sedsprintf_rs is now capable of acting as a new network, passing telemetry data to endpoints across hardware 
+and software networks (uart, can ethernet, etc.) and across differing platforms and protocols (tcp, udp, etc.).
+
+---
 
 ## Overview
 
@@ -17,17 +37,20 @@ The core functions are as follows:
 - A function to handle local data endpoints (e.g. logging to console, writing to file, sending over radio, etc.)
   (Note: each local endpoint needs its own function)
 
-The library also provides helpers to convert the telemetry data into strings for logging purposes. the library also
-handles the serialization and deserialization of the telemetry data.
+Sedsprintf_rs also provides helpers to convert the telemetry data into strings for logging purposes.
+The library also handles the serialization and deserialization of the telemetry data.
 
-The library is platform-agnostic and can be used on any platform that supports Rust. The library is primarily designed
+Sedsprintf_rs is platform-agnostic and can be used on any platform that supports Rust. The library is primarily designed
 to be used in embedded systems and used by a C program, but can also be used in desktop applications and other rust
 codebases.
 
-This library also supports python bindings via pyo3. to use you need maturin installed to build the python package.
+Sedsprintf_rs also supports python bindings via pyo3. to use you need maturin installed to build the python package.
+
 The size of the header in a serialized packet is around 20 bytes (the size will change based on the total number of
 endpoints in your system and the length of the sender string), so a packet containing three floats is 32 bytes total.
 This small size makes it ideal for use in low bandwidth environments.
+
+---
 
 ## Building
 
@@ -38,8 +61,8 @@ project.
 
 Building with python bindings can be done with the build script on posix systems:
 
-```bash
-./build.py release maturin-develop 
+```
+./build.py release maturin-develop
 ```
 
 When building in an embedded environment the library will compile to a static library that can be linked to your C code.
@@ -48,58 +71,159 @@ by creating shims that expose pvPortMalloc and vPortFree.
 
 ## Dependencies
 
-- Rust
-
-  get it from https://rustup.rs/
-- Cmake
+- Rust → https://rustup.rs/
+- CMake
 - A C++ compiler
 - A C compiler
 
 ## Usage
 
-- When using this library as a submodule or subtree in a C or C++ project, make sure to add the following to your
-  cmakelists.txt and adjust the target as needed:
-  ```cmake
-  set(SEDSPRINTF_RS_TARGET "thumbv7m-none-eabi" CACHE STRING "" FORCE) # Set target for embedded systems
-  add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf_rs)
-  target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf_rs)
-  ```
-- Setup the config.rs to match your application needs. All config options are in the config.rs file and are very
+### Linking from a C/C++ CMake project
+
+```
+# Example: building for an embedded target
+set(SEDSPRINTF_RS_TARGET "thumbv7m-none-eabi" CACHE STRING "" FORCE)
+
+# set the sender name
+set(SEDSPRINTF_RS_DEVICE_IDENTIFIER "FC26_MAIN" CACHE STRING "" FORCE)
+
+# Use the provided CMake glue
+add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf_rs/cmake sedsprintf_rs_build)
+
+# Link against the imported target
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE sedsprintf_rs::sedsprintf_rs)
+```
+
+- Set up the config.rs to match your application needs. All config options are in the config.rs file and are very
   self-explanatory.
   NOTE: (ON EVERY SYSTEM THIS LIBRARY IS USED, THE CONFIG ENUMS MUST BE THE SAME OR UNDEFINED BEHAVIOR MAY OCCUR). So
   for most
-  applications I would recommend making a fork and setting the config values you need for your application minus the
-  sender,
-  and then only changing the sender string on each system, this will ensure that the enum values are the same on all
-  systems.
+  applications I would recommend making a fork and setting the config values you need for your application.
 
+---
 
-- To add this repo as a subtree to allow for modifications, use the following command:
-  ```bash
-  git remote add sedsprintf-upstream https://github.com/Rylan-Meilutis/sedsprintf_rs.git
-  git fetch sedsprintf-upstream
-  
-  git config subtree.sedsprintf_rs.remote sedsprintf-upstream
-  git config subtree.sedsprintf_rs.branch dev   # or main or the branch of your choosing
+## Setting the device / platform name
 
-  git subtree add --prefix=sedsprintf_rs sedsprintf-upstream main
-  ```
-  To switch branches, run the following
-  ```bash
-  git config subtree.sedsprintf_rs.branch <the-new-branch> 
-  ```
-- To update the subtree, use the following command (Note all local changes must be committed before you can update):
-  ```bash
-  git subtree pull --prefix=sedsprintf_rs sedsprintf-upstream main -m "Merge sedsprintf_rs upstream main"
-  ```
+Each build of `sedsprintf_rs` embeds a **device identifier** which appears in every telemetry packet header.
 
+Rust resolves it using:
 
-- If using in an embedded environment, make sure to provide the necessary allocation functions if using a custom
-  allocator.
-  Below is an example implementation using malloc, free, and fwrite, feel free to implement to use your own allocator or
-  use ones provided by your RTOS. In the same sense, feel free to implement your own logging mechanism for when the
-  telemetry falls back to local logging for errors.
+```
+pub const DEVICE_IDENTIFIER: &str = match option_env!("DEVICE_IDENTIFIER") {
+    Some(v) => v,
+    None => "TEST_PLATFORM",
+};
+```
 
+### Set it globally using `.cargo/config.toml` (recommended)
+
+Create:
+
+```
+# .cargo/config.toml
+[env]
+DEVICE_IDENTIFIER = "GROUND_STATION_26"
+```
+
+After this, any `cargo build`, `cargo run`, or CI build will embed `"GROUND_STATION_26"` automatically.
+
+No build script changes required.
+
+---
+
+### Setting the name from CMake
+
+```
+set(SEDSPRINTF_RS_DEVICE_IDENTIFIER "FC26_MAIN" CACHE STRING "" FORCE)
+```
+
+Note: This must be set **before** including the sedsprintf_rs CMake as a subdirectory.
+
+Typical examples:
+
+```cmake
+# Flight computer firmware
+set(SEDSPRINTF_RS_DEVICE_IDENTIFIER "FC26_MAIN" CACHE STRING "" FORCE)
+
+# or
+
+# Ground station app
+set(SEDSPRINTF_RS_DEVICE_IDENTIFIER "GS26" CACHE STRING "" FORCE)
+```
+
+### Manually via build.py
+
+```bash
+# Host build
+./build.py release device_id=GROUND_STATION
+# Embedded build
+./build.py embedded release target=thumbv7em-none-eabihf device_id=FC
+```
+
+---
+
+## Using this repo as a subtree
+
+```
+git remote add sedsprintf-upstream https://github.com/Rylan-Meilutis/sedsprintf_rs.git
+git fetch sedsprintf-upstream
+
+git config subtree.sedsprintf_rs.remote sedsprintf-upstream
+git config subtree.sedsprintf_rs.branch main
+
+git subtree add --prefix=sedsprintf_rs sedsprintf-upstream main
+```
+
+To Switch branches:
+
+```bash
+git config subtree.sedsprintf_rs.branch <the-new-branch>
+```
+
+Update:
+
+```bash
+git subtree pull --prefix=sedsprintf_rs sedsprintf-upstream main \
+    -m "Merge sedsprintf_rs upstream main"
+```
+
+Helper scripts:
+
+```bash
+./scripts/subtree_update_no_stash.py
+./scripts/subtree_update.py            # stash → update → stash-pop
+```
+
+---
+
+## Using this repo as a submodule
+
+If you prefer a **submodule** instead of a subtree:
+
+```bash
+git submodule add -b main https://github.com/Rylan-Meilutis/sedsprintf_rs.git sedsprintf_rs
+
+git config submodule.sedsprintf_rs.branch main   # (or dev, etc.)
+```
+
+Initialize:
+
+```bash
+git submodule update --init --recursive
+```
+
+Update using helper scripts:
+
+The scripts:
+
+- read `submodule.sedsprintf_rs.branch`
+- fetch `origin/<branch>`
+- fast-forward the submodule repo
+- stage & commit the updated submodule pointer in the parent repo
+
+---
+
+## Embedded allocator hook example (C)
 
 ```C
 // telemetry_hooks.c
