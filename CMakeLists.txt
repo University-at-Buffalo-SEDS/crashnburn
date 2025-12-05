@@ -62,6 +62,8 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 
 #set(SEDSPRINTF_STM_BUILD ON)
+set(SEDSPRINTF_RS_DEVICE_IDENTIFIER "CNB" CACHE STRING "" FORCE)
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/sedsprintf_rs)
 target_link_libraries(${CMAKE_PROJECT_NAME} sedsprintf_rs)
 
