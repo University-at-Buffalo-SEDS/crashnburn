@@ -12,6 +12,8 @@
 use crate::{MessageDataType, MessageElementCount, MessageMeta, MessageType, STRING_VALUE_ELEMENT};
 use strum_macros::EnumCount;
 use crate::EndpointsBroadcastMode;
+use sedsprintf_macros::define_stack_payload;
+
 // -----------------------------------------------------------------------------
 // User-editable configuration
 // -----------------------------------------------------------------------------
@@ -36,6 +38,10 @@ pub const MAX_RECENT_RX_IDS: usize = 128;
 /// Starting size of the internal router and relay queues.
 pub const STARTING_QUEUE_SIZE: usize = 16;
 
+/// Maximum size of the internal router and relay queues in Bytes.
+/// Higher values increase memory usage but may help prevent packet
+/// drops under high load.
+pub const MAX_QUEUE_SIZE: usize = 1024 * 50; // 50 KB
 
 /// Minimum payload size (in bytes) before we consider compression.
 pub const PAYLOAD_COMPRESS_THRESHOLD: usize = 16;
@@ -47,20 +53,20 @@ pub const PAYLOAD_COMPRESSION_LEVEL: u8 = 10;
 ///
 /// Dynamic string messages may be longer, but many tests and error paths
 /// assume this bound when generating placeholder data.
-pub const MAX_STATIC_STRING_LENGTH: usize = 1024;
+pub const STATIC_STRING_LENGTH: usize = 1024;
 
 /// Maximum length, in bytes, of any **static** hex payload.
-pub const MAX_STATIC_HEX_LENGTH: usize = 1024;
+pub const STATIC_HEX_LENGTH: usize = 1024;
 
 /// Maximum number of fractional digits when converting floating-point values
 /// to strings (e.g., for human-readable error payloads).
 ///
 /// Higher values increase both payload size and formatting cost.
-pub const MAX_PRECISION_IN_STRINGS: usize = 8; // 12 is expensive; tune as needed
+pub const STRING_PRECISION: usize = 8; // 12 is expensive; tune as needed
 
 /// Maximum payload size (in bytes) that is allowed to be allocated on the
 /// stack before the implementation switches to heap allocation.
-pub const MAX_STACK_PAYLOAD_SIZE: usize = 256;
+define_stack_payload!(64);
 
 /// Maximum number of times a handler is retried before giving up and
 /// surfacing a [`TelemetryError::HandlerError`](crate::TelemetryError::HandlerError).

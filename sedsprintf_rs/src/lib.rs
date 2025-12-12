@@ -34,7 +34,7 @@ use std::io::Error;
 
 use crate::config::{
     get_message_data_type, get_message_info_types, get_message_meta, DataEndpoint, DataType,
-    MAX_STATIC_HEX_LENGTH, MAX_STATIC_STRING_LENGTH,
+    STATIC_HEX_LENGTH, STATIC_STRING_LENGTH,
 };
 use crate::macros::{ReprI32Enum, ReprU32Enum};
 use alloc::string::ToString;
@@ -125,6 +125,7 @@ pub mod serialize;
 mod small_payload;
 pub mod telemetry_packet;
 pub mod relay;
+mod queue;
 // ============================================================================
 //  Schema-derived global constants
 // ============================================================================
@@ -158,10 +159,15 @@ pub enum MessageElementCount {
     Dynamic,
 }
 
+/// Broadcast mode for endpoints
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum EndpointsBroadcastMode {
+    
+    /// Always transmit the message, even if we have and endpoint for it.
     Always,
+    /// Never transmit the packet, even if we don't have an endpoint for it.
     Never,
+    /// Transmit only if we don't have an endpoint for it. Otherwise, use the endpoint handler and don't broadcast.
     Default,
 }
 /// Static metadata for a message type: element count and valid endpoints.
@@ -310,8 +316,8 @@ pub const fn data_type_size(dt: MessageDataType) -> usize {
         MessageDataType::Int64 => size_of::<i64>(),
         MessageDataType::Int128 => size_of::<i128>(),
         MessageDataType::Bool => size_of::<bool>(),
-        MessageDataType::String => MAX_STATIC_STRING_LENGTH,
-        MessageDataType::Binary => MAX_STATIC_HEX_LENGTH,
+        MessageDataType::String => STATIC_STRING_LENGTH,
+        MessageDataType::Binary => STATIC_HEX_LENGTH,
         MessageDataType::NoData => 0,
     }
 }
