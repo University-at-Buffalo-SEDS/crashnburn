@@ -33,14 +33,10 @@ use pyo3::types::{PyBytes, PyDict, PyList, PyModule, PyTuple};
 use std::sync::{Arc as SArc, Mutex, OnceLock};
 
 use crate::{
-    config::DataEndpoint,
-    get_needed_message_size,
-    message_meta,
-    relay::Relay,
+    config::{DataEndpoint, DataType}, get_needed_message_size, message_meta, relay::Relay,
     router::{Clock, EndpointHandler, LeBytes, LinkId, Router, RouterConfig, RouterMode},
     serialize::{deserialize_packet, packet_wire_size, peek_envelope, serialize_packet},
-    telemetry_packet::{DataType, TelemetryPacket},
-    try_enum_from_u32,
+    telemetry_packet::TelemetryPacket, try_enum_from_u32,
     MessageElementCount,
     TelemetryError,
     TelemetryResult,
@@ -96,8 +92,8 @@ fn endpoint_from_u32(x: u32) -> TelemetryResult<DataEndpoint> {
 }
 
 /// Convert Python-side `int`/`u64` → `LinkId`.
-fn link_from_u64(x: u64) -> LinkId {
-    LinkId(x)
+fn link_from_u64(x: u64) -> TelemetryResult<LinkId> {
+    LinkId::new(x)
 }
 
 /// Return the fixed payload size in bytes for a type, or `None` if dynamic.
@@ -116,7 +112,7 @@ fn call_py_cb_1_or_2(
     arg1: &Bound<'_, PyAny>,
     link: &LinkId,
 ) -> Result<(), PyErr> {
-    match cb.call1(py, (arg1, link.0)) {
+    match cb.call1(py, (arg1, link.id())) {
         Ok(_) => Ok(()),
         Err(e) => {
             if e.is_instance_of::<pyo3::exceptions::PyTypeError>(py) {
@@ -383,6 +379,9 @@ impl PyRouter {
                                 .map_err(|_| TelemetryError::Io("packet wrapper"))?
                                 .into_any();
 
+                            // FIX: bind owned Py<PyAny> into Bound<PyAny>
+                            let any = any.bind(py);
+
                             match call_py_cb_1_or_2(py, &cb_for_closure, &any, link) {
                                 Ok(()) => Ok(()),
                                 Err(err) => {
@@ -402,18 +401,19 @@ impl PyRouter {
                     let cb_for_closure = cb.clone_ref(py);
                     keep_ser.push(cb);
 
-                    let eh = EndpointHandler::new_serialized_handler(endpoint, move |bytes, link| {
-                        Python::attach(|py| {
-                            let arg = PyBytes::new(py, bytes).into_any();
-                            match call_py_cb_1_or_2(py, &cb_for_closure, &arg, link) {
-                                Ok(()) => Ok(()),
-                                Err(err) => {
-                                    err.restore(py);
-                                    Err(TelemetryError::Io("serialized handler error"))
+                    let eh =
+                        EndpointHandler::new_serialized_handler(endpoint, move |bytes, link| {
+                            Python::attach(|py| {
+                                let arg = PyBytes::new(py, bytes).into_any();
+                                match call_py_cb_1_or_2(py, &cb_for_closure, &arg, link) {
+                                    Ok(()) => Ok(()),
+                                    Err(err) => {
+                                        err.restore(py);
+                                        Err(TelemetryError::Io("serialized handler error"))
+                                    }
                                 }
-                            }
-                        })
-                    });
+                            })
+                        });
 
                     handlers_vec.push(eh);
                 }
@@ -515,6 +515,9 @@ impl PyRouter {
                                 .map_err(|_| TelemetryError::Io("packet wrapper"))?
                                 .into_any();
 
+                            // FIX: bind owned Py<PyAny> into Bound<PyAny>
+                            let any = any.bind(py);
+
                             match call_py_cb_1_or_2(py, &cb_for_closure, &any, link) {
                                 Ok(()) => Ok(()),
                                 Err(err) => {
@@ -534,18 +537,19 @@ impl PyRouter {
                     let cb_for_closure = cb.clone_ref(py);
                     keep_ser.push(cb);
 
-                    let eh = EndpointHandler::new_serialized_handler(endpoint, move |bytes, link| {
-                        Python::attach(|py| {
-                            let arg = PyBytes::new(py, bytes).into_any();
-                            match call_py_cb_1_or_2(py, &cb_for_closure, &arg, link) {
-                                Ok(()) => Ok(()),
-                                Err(err) => {
-                                    err.restore(py);
-                                    Err(TelemetryError::Io("serialized handler error"))
+                    let eh =
+                        EndpointHandler::new_serialized_handler(endpoint, move |bytes, link| {
+                            Python::attach(|py| {
+                                let arg = PyBytes::new(py, bytes).into_any();
+                                match call_py_cb_1_or_2(py, &cb_for_closure, &arg, link) {
+                                    Ok(()) => Ok(()),
+                                    Err(err) => {
+                                        err.restore(py);
+                                        Err(TelemetryError::Io("serialized handler error"))
+                                    }
                                 }
-                            }
-                        })
-                    });
+                            })
+                        });
 
                     handlers_vec.push(eh);
                 }
@@ -601,7 +605,11 @@ impl PyRouter {
         rtr.tx_queue(pkt_ref.inner.clone()).map_err(py_err_from)
     }
 
-    fn transmit_serialized_message(&self, _py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn transmit_serialized_message(
+        &self,
+        _py: Python<'_>,
+        data: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
         let bytes: &[u8] = data.extract()?;
         let arc: AArc<[u8]> = AArc::from(bytes);
 
@@ -653,8 +661,9 @@ impl PyRouter {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("router poisoned"))?;
-        rtr.rx_serialized_from(bytes, link_from_u64(link_id))
-            .map_err(py_err_from)
+        let link = link_from_u64(link_id).map_err(|e| py_err_from(e))?;
+
+        rtr.rx_serialized_from(bytes, link).map_err(py_err_from)
     }
 
     fn receive_serialized_queue(&self, _py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -677,7 +686,9 @@ impl PyRouter {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("router poisoned"))?;
-        rtr.rx_serialized_queue_from(bytes, link_from_u64(link_id))
+        let link = link_from_u64(link_id).map_err(|e| py_err_from(e))?;
+
+        rtr.rx_serialized_queue_from(bytes, link)
             .map_err(py_err_from)
     }
 
@@ -692,7 +703,9 @@ impl PyRouter {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("router poisoned"))?;
-        rtr.tx_from(pkt_ref.inner.clone(), link_from_u64(link_id))
+        let link = link_from_u64(link_id).map_err(|e| py_err_from(e))?;
+
+        rtr.tx_from(pkt_ref.inner.clone(), link)
             .map_err(py_err_from)
     }
 
@@ -707,7 +720,8 @@ impl PyRouter {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("router poisoned"))?;
-        rtr.tx_queue_from(pkt_ref.inner.clone(), link_from_u64(link_id))
+        let link = link_from_u64(link_id).map_err(|e| py_err_from(e))?;
+        rtr.tx_queue_from(pkt_ref.inner.clone(), link)
             .map_err(py_err_from)
     }
 
@@ -724,9 +738,8 @@ impl PyRouter {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("router poisoned"))?;
-
-        rtr.tx_serialized_from(arc, link_from_u64(link_id))
-            .map_err(py_err_from)
+        let link = link_from_u64(link_id).map_err(|e| py_err_from(e))?;
+        rtr.tx_serialized_from(arc, link).map_err(py_err_from)
     }
 
     fn transmit_serialized_message_queue_from(
@@ -742,9 +755,8 @@ impl PyRouter {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("router poisoned"))?;
-
-        rtr.tx_serialized_queue_from(arc, link_from_u64(link_id))
-            .map_err(py_err_from)
+        let link = link_from_u64(link_id).map_err(|e| py_err_from(e))?;
+        rtr.tx_serialized_queue_from(arc, link).map_err(py_err_from)
     }
 
     // ------------------------------------------------------------------------
@@ -1065,7 +1077,7 @@ impl PyRelay {
 
         let name_static: &'static str = Box::leak(name.to_owned().into_boxed_str());
 
-        let id = self.inner.add_side(name_static, move |bytes| {
+        let id = self.inner.add_side_serialized(name_static, move |bytes| {
             Python::attach(|py| {
                 let arg = PyBytes::new(py, bytes);
                 match cb_for_closure.call1(py, (&arg,)) {
