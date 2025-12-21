@@ -8,9 +8,9 @@
 //!   - [`get_message_info_types`]
 //!   - [`get_message_meta`]
 
-use crate::EndpointsBroadcastMode;
+use crate::{EndpointMeta, EndpointsBroadcastMode};
 #[allow(unused_imports)]
-use crate::{MessageDataType, MessageElement, MessageMeta, MessageClass, STRING_VALUE_ELEMENT};
+use crate::{MessageClass, MessageDataType, MessageElement, MessageMeta, STRING_VALUE_ELEMENT};
 use sedsprintf_macros::define_stack_payload;
 use strum_macros::EnumCount;
 // -----------------------------------------------------------------------------
@@ -92,22 +92,16 @@ pub enum DataEndpoint {
     Serial,
 }
 
-impl DataEndpoint {
-    /// Return a stable string representation used in logs and in
-    /// `TelemetryPacket::to_string()` output.
-    ///
-    /// This should remain stable over time for compatibility with tests and
-    /// external tooling.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DataEndpoint::Serial => "Serial",
-        }
-    }
-
-    pub fn get_broadcast_mode(&self) -> EndpointsBroadcastMode {
-        match self {
-            DataEndpoint::Serial => EndpointsBroadcastMode::Default,
-        }
+/// Return the full schema metadata for a given [`DataEndpoint`].
+/// Each variant specifies:
+/// - `name`: string identifier for the endpoint.
+/// - `broadcast_mode`: default broadcast mode for packets sent to this endpoint.
+pub const fn get_endpoint_meta(endpoint_type: DataEndpoint) -> EndpointMeta {
+    match endpoint_type {
+        DataEndpoint::Serial => EndpointMeta {
+            name: "SERIAL",
+            broadcast_mode: EndpointsBroadcastMode::Default,
+        },
     }
 }
 
