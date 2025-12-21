@@ -154,11 +154,11 @@ impl_repr_u32_enum!(DataEndpoint, MAX_VALUE_DATA_ENDPOINT);
 pub enum MessageElement {
     /// Fixed number of elements.
     ///
-    /// (count, MessageDataType, MessageType)
+    /// (count, MessageDataType, MessageClass)
     Static(usize, MessageDataType, MessageClass),
     /// Variable number of elements (payload size can vary).
     ///
-    /// (MessageDataType, MessageType)
+    /// (MessageDataType, MessageClass)
     Dynamic(MessageDataType, MessageClass),
 }
 
@@ -358,7 +358,7 @@ pub const fn data_type_size(dt: MessageDataType) -> usize {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum MessageClass {
     /// Informational telemetry.
-    Info,
+    Data,
     /// Error / fault telemetry.
     Error,
     /// Warning telemetry.

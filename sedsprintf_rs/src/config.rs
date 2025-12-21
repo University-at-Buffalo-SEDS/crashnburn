@@ -159,7 +159,7 @@ pub const fn get_message_meta(data_type: DataType) -> MessageMeta {
             MessageMeta {
                 // System Status
                 name: "ACCELEROMETER_DATA",
-                element: MessageElement::Static(3, MessageDataType::Float32, MessageClass::Info),
+                element: MessageElement::Static(3, MessageDataType::Float32, MessageClass::Data),
                 endpoints: &[DataEndpoint::Serial],
             }
         }
@@ -167,7 +167,7 @@ pub const fn get_message_meta(data_type: DataType) -> MessageMeta {
             MessageMeta {
                 // Barometer Data
                 name: "GYROSCOPE_DATA",
-                element: MessageElement::Static(3, MessageDataType::Float32, MessageClass::Info),
+                element: MessageElement::Static(3, MessageDataType::Float32, MessageClass::Data),
                 endpoints: &[DataEndpoint::Serial],
             }
         }
@@ -175,7 +175,7 @@ pub const fn get_message_meta(data_type: DataType) -> MessageMeta {
             MessageMeta {
                 // Message Data
                 name: "BAROMETER_DATA",
-                element: MessageElement::Static(3,MessageDataType::Float32, MessageClass::Info),
+                element: MessageElement::Static(3,MessageDataType::Float32, MessageClass::Data),
                 endpoints: &[DataEndpoint::Serial],
             }
         }
