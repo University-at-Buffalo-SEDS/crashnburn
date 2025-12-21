@@ -10,10 +10,9 @@
 
 use crate::EndpointsBroadcastMode;
 #[allow(unused_imports)]
-use crate::{MessageDataType, MessageElementCount, MessageMeta, MessageType, STRING_VALUE_ELEMENT};
+use crate::{MessageDataType, MessageElement, MessageMeta, MessageClass, STRING_VALUE_ELEMENT};
 use sedsprintf_macros::define_stack_payload;
 use strum_macros::EnumCount;
-
 // -----------------------------------------------------------------------------
 // User-editable configuration
 // -----------------------------------------------------------------------------
@@ -105,7 +104,7 @@ impl DataEndpoint {
         }
     }
 
-    pub fn get_broadast_mode(&self) -> EndpointsBroadcastMode {
+    pub fn get_broadcast_mode(&self) -> EndpointsBroadcastMode {
         match self {
             DataEndpoint::Serial => EndpointsBroadcastMode::Default,
         }
@@ -137,56 +136,6 @@ pub enum DataType {
     BarometerData,
 }
 
-impl DataType {
-    /// Return a stable string representation used in logs, headers, and in
-    /// `TelemetryPacket::to_string()` formatting.
-    ///
-    /// This must be kept up to date when adding new variants.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DataType::TelemetryError => "TELEMETRY_ERROR",
-            DataType::GyroscopeData => "GYROSCOPE_DATA",
-            DataType::AccelerometerData => "ACCELEROMETER_DATA",
-            DataType::BarometerData => "BAROMETER_DATA",
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Schema helpers: element type, message kind, and metadata
-// -----------------------------------------------------------------------------
-
-/// Return the element type for the payload of a given [`DataType`].
-///
-/// The order and mapping must stay in lock-step with [`DataType`], and with the
-/// schema used by `TelemetryPacket` validation. Available element types are:
-///
-/// - `String`
-/// - `Float32`
-/// - `UInt8`, `UInt16`, `UInt32`, `UInt64`, `UInt128`
-/// - `Int8`, `Int16`, `Int32`, `Int64`, `Int128`
-pub const fn get_message_data_type(data_type: DataType) -> MessageDataType {
-    match data_type {
-        DataType::TelemetryError => MessageDataType::String,
-        DataType::GyroscopeData => MessageDataType::Float32,
-        DataType::AccelerometerData => MessageDataType::Float32,
-        DataType::BarometerData => MessageDataType::Float32,
-    }
-}
-
-/// Return the logical message type (severity/category) for a given [`DataType`].
-///
-/// This affects how messages may be surfaced or filtered in the higher-level
-/// API (e.g. errors vs informational telemetry).
-pub const fn get_message_info_types(message_type: DataType) -> MessageType {
-    match message_type {
-        DataType::TelemetryError => MessageType::Error,
-        DataType::GyroscopeData => MessageType::Info,
-        DataType::AccelerometerData => MessageType::Info,
-        DataType::BarometerData => MessageType::Info,
-    }
-}
-
 /// Return the full schema metadata for a given [`DataType`].
 ///
 /// Each variant specifies:
@@ -201,28 +150,32 @@ pub const fn get_message_meta(data_type: DataType) -> MessageMeta {
         DataType::TelemetryError => {
             MessageMeta {
                 // Telemetry Error
-                element_count: MessageElementCount::Dynamic,
+                name: "TELEMETRY_ERROR",
+                element: MessageElement::Dynamic(MessageDataType::String, MessageClass::Error),
                 endpoints: &[DataEndpoint::Serial],
             }
         }
         DataType::AccelerometerData => {
             MessageMeta {
                 // System Status
-                element_count: MessageElementCount::Static(3),
+                name: "ACCELEROMETER_DATA",
+                element: MessageElement::Static(3, MessageDataType::Float32, MessageClass::Info),
                 endpoints: &[DataEndpoint::Serial],
             }
         }
         DataType::GyroscopeData => {
             MessageMeta {
                 // Barometer Data
-                element_count: MessageElementCount::Static(3),
+                name: "GYROSCOPE_DATA",
+                element: MessageElement::Static(3, MessageDataType::Float32, MessageClass::Info),
                 endpoints: &[DataEndpoint::Serial],
             }
         }
         DataType::BarometerData => {
             MessageMeta {
                 // Message Data
-                element_count: MessageElementCount::Static(3),
+                name: "BAROMETER_DATA",
+                element: MessageElement::Static(3,MessageDataType::Float32, MessageClass::Info),
                 endpoints: &[DataEndpoint::Serial],
             }
         }
