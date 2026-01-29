@@ -5,7 +5,7 @@ nodes that exchange telemetry must use the exact same schema (including ordering
 
 Location:
 
-- `telemetry_config.json`
+- `telemetry_config.json` (override path with `SEDSPRINTF_RS_SCHEMA_PATH`)
 
 Generated outputs:
 
@@ -15,8 +15,15 @@ Generated outputs:
 
 ## Why schema order matters
 
-The order of items in `telemetry_config.json` defines the enum discriminants. Those discriminants are sent on the wire
-and used in endpoint bitmaps. Reordering entries without updating every deployed system will break decode compatibility.
+The order of items in `telemetry_config.json` defines the enum discriminants (with built-ins inserted as noted below).
+Those discriminants are sent on the wire and used in endpoint bitmaps. Reordering entries without updating every
+deployed system will break decode compatibility.
+
+Built-ins:
+
+- `TelemetryError` data type is built-in and is appended after all schema types.
+- `TelemetryError` endpoint is built-in and is appended after all schema endpoints.
+- Do not define `TelemetryError` in the JSON schema.
 
 Safe changes:
 
@@ -53,6 +60,8 @@ Top-level keys:
 - `rust`: Rust enum variant name.
 - `name`: wire/display name.
 - `doc`: optional description.
+- `reliable`: optional boolean (legacy). `true` maps to ordered reliable delivery.
+- `reliable_mode`: optional string (`None`, `Ordered`, `Unordered`). Overrides `reliable` when present.
 - `class`: `Data`, `Warning`, or `Error` (used for formatting and error handling).
 - `element`: payload layout description (see below).
 - `endpoints`: list of endpoint Rust variant names (used as metadata for defaults/validation).
@@ -84,7 +93,7 @@ These are configured in `src/config.rs` and used by `data_type_size`.
 
 The macro-generated metadata types are defined in `src/lib.rs`:
 
-- `MessageMeta { name, element, endpoints }`
+- `MessageMeta { name, element, endpoints, reliable }`
 - `MessageElement::{Static, Dynamic}`
 - `MessageDataType` (primitive element type)
 - `MessageClass` (Data/Warning/Error)
@@ -95,6 +104,7 @@ Helpers:
 - `get_data_type(ty)`: returns the primitive element type.
 - `get_needed_message_size(ty)`: returns the static payload size (bytes).
 - `endpoints_from_datatype(ty)`: returns endpoints listed in the schema.
+- `is_reliable_type(ty)`: returns whether the type uses reliable delivery on the wire.
 
 ## How the schema is used at runtime
 
@@ -114,6 +124,7 @@ Helpers:
       "rust": "GpsData",
       "name": "GPS_DATA",
       "doc": "GPS data",
+      "reliable": false,
       "class": "Data",
       "element": { "kind": "Static", "data_type": "Float32", "count": 3 },
       "endpoints": ["Radio"]

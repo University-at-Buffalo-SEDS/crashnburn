@@ -18,22 +18,22 @@ look the way they do. It assumes no prior knowledge of the codebase.
 - `src/telemetry_packet.rs`: `TelemetryPacket` validation, formatting, and packet IDs.
 - `src/small_payload.rs`: inline-optimized payload storage (`SmallPayload`).
 - `src/serialize.rs`: compact wire format, ULEB128 helpers, envelope peek, packet IDs from wire.
-- `src/router.rs`: router core, queues, endpoint handlers, LinkId plumbing.
+- `src/router.rs`: router core, queues, endpoint handlers, side-based routing.
 - `src/relay.rs`: schema-agnostic fanout relay between sides.
 - `src/queue.rs`: bounded deque used by router and relay.
 - `src/c_api.rs` and `src/python_api.rs`: FFI bindings (C ABI and pyo3).
 
 ## Schema and metadata pipeline
 
-The schema is defined in `telemetry_config.json`. At build time:
+The schema is defined in `telemetry_config.json` (plus built-in `TelemetryError` endpoint/type). At build time:
 
 1) `build.rs` reads the schema to generate C headers and Python `.pyi` stubs.
 2) `define_telemetry_schema!` in `src/config.rs` expands into Rust enums and metadata tables.
 
 Core schema types:
 
-- `DataEndpoint`: enum generated from the `endpoints` list in `telemetry_config.json`.
-- `DataType`: enum generated from the `types` list in `telemetry_config.json`.
+- `DataEndpoint`: enum generated from the `endpoints` list in `telemetry_config.json` plus built-ins.
+- `DataType`: enum generated from the `types` list in `telemetry_config.json` plus built-ins.
 - `MessageMeta`: per-`DataType` metadata (name, element layout, allowed endpoints).
 - `MessageElement`: `Static(count, MessageDataType, MessageClass)` or `Dynamic(MessageDataType, MessageClass)`.
 - `MessageDataType`: primitive element type (Float32, UInt16, String, Binary, etc.).
@@ -135,8 +135,8 @@ Key structures:
 
 - `RouterConfig`: holds local `EndpointHandler` definitions in an `Arc<[EndpointHandler]>`.
 - `EndpointHandler`: packet or serialized handler for a specific `DataEndpoint`.
-- `LinkId`: identifies an ingress/egress link. Values 0 and 1 are reserved (default/local).
-- `QueueItem`: either `TelemetryPacket` or serialized bytes + `LinkId`.
+- `RouterSideId`: identifies a named side (UART/CAN/RADIO/etc.).
+- `RouterItem`: either `TelemetryPacket` or serialized bytes.
 
 Receive flow:
 
@@ -170,6 +170,7 @@ Error handling:
 `Relay` is schema-agnostic and purely forwards packets between named sides (UART/CAN/RADIO/etc.).
 
 - Each side registers a TX handler for serialized bytes or full packets.
+- Each side can opt out of reliable sequencing/ACKs (useful for TCP links).
 - The relay maintains RX/TX queues and a recent-ID cache like the router.
 - Fanout clones the `Arc` for payload sharing; it does not decode unless needed for a handler.
 - Dedupe ignores the source side so duplicates from different links are dropped.
