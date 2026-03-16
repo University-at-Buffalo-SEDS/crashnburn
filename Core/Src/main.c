@@ -48,43 +48,84 @@ SPI_HandleTypeDef hspi1;
 static osMutexId_t cdc_mutex;
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
-/* Convert milliseconds to RTOS ticks (works for any tick freq) */
-#define MS_TO_TICKS(ms)                                                        \
-  ((uint32_t)((((uint64_t)(ms)) * osKernelGetTickFreq()) / 1000u))
-
-/* Task handles */
-osThreadId_t TaskHandles[2];
-/* ---------------- Task attributes (sizes in bytes) ----------------
-   Start generously to avoid stack overflows from drivers/printf.
-   Tune down later with uxTaskGetStackHighWaterMark() if desired.
-*/
-enum {
-  STACK_DEFAULT = 512,
-  STACK_SENSOR = 1024 * 16,
-  STACK_DISPATCH = 1024 * 32
-};
-
-static const osThreadAttr_t sensorTask_attributes = {
-    .name = "SensorTask",
-    .priority = osPriorityNormal,
-    .stack_size = STACK_SENSOR};
-static const osThreadAttr_t loggingTask_attributes = {
-    .name = "LoggingTask",
-    /* Make dispatcher a bit higher so it can drain queues promptly */
-    .priority = osPriorityNormal,
-    .stack_size = STACK_DISPATCH};
-
 /* ====================== Prototypes ====================== */
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 
-static void SetupSystem(void *argument);
-static void SensorTask(void *arg);
-static void DispatchTask(void *arg);
 void cdc_printf_init(void);
 uint8_t router_ready = 0;
 /* ====================== Main ====================== */
+
+#include "platform.h"
+#include <assert.h>
+#include "testing.h"
+
+static struct gyro_config gyro_conf = {
+    .rng = Gyro_Range_2000Dps,
+    .bw = Gyro_532Hz_ODR_2000Hz,
+};
+
+static struct accl_config accl_conf = {
+    .mode = Normal_1600Hz,
+    .rng = Accl_Range_24g,
+};
+
+void test_gyro_sync(SPI_HandleTypeDef *hspi, int lowpower)
+{
+	if (lowpower)
+	{
+		gyro_conf.bw = Gyro_47Hz_ODR_400Hz;
+	}
+
+	assert(gyro_init(&hspi1, &gyro_conf) == HAL_OK);
+
+	HAL_StatusTypeDef st;
+	struct coords q = {0};
+
+	for (int k = 0; k < SENSOR_SYNC_STEPS; ++k)
+	{
+		st = gyro_read(hspi, &q);
+
+		if (st == HAL_OK)
+		{
+			log_measurement(SEDS_DT_GYRO_DATA, &q);
+		}
+		else
+		{
+			log_err("Gyro: sync fetch failed: %d", st);
+		}
+	}
+}
+
+
+void test_accl_sync(SPI_HandleTypeDef *hspi, int lowpower)
+{
+	if (lowpower)
+	{
+		accl_conf.mode = Normal_400Hz;
+	}
+
+	assert(accl_init(&hspi1, &accl_conf) == HAL_OK);
+
+	HAL_StatusTypeDef st;
+	struct coords q = {0};
+
+	for (int k = 0; k < SENSOR_SYNC_STEPS; ++k)
+	{
+		st = accl_read(hspi, &q);
+
+		if (st == HAL_OK)
+		{
+			log_measurement(SEDS_DT_ACCEL_DATA, &q);
+		}
+		else
+		{
+			log_err("Accl: sync fetch failed: %d", st);
+		}
+	}
+}
+
 
 int main(void) {
   HAL_Init();
@@ -93,20 +134,12 @@ int main(void) {
   MX_GPIO_Init();
   MX_SPI1_Init();
 
-  /* Initialize RTOS kernel objects first */
-  osKernelInitialize();
+	test_gyro_sync(&hspi1, 0);
+	test_gyro_sync(&hspi1, 1);
+	test_accl_sync(&hspi1, 0);
+	test_accl_sync(&hspi1, 1);
 
-  /* Create threads */
-  TaskHandles[0] = osThreadNew(SensorTask, NULL, &sensorTask_attributes);
-  TaskHandles[1] = osThreadNew(DispatchTask, NULL, &loggingTask_attributes);
-  SetupSystem(NULL); // Call setup task directly before starting scheduler
-  if (!TaskHandles[0] || !TaskHandles[1]) {
-    /* Not enough heap or configTOTAL_HEAP_SIZE too small */
-    Error_Handler();
-  }
-
-  /* Start scheduler */
-  osKernelStart();
+	_Exit(0);
 
   /* Should never reach here */
   while (1) {
@@ -194,137 +227,6 @@ static void MX_GPIO_Init(void) {
   HAL_GPIO_Init(led_GPIO_Port, &GPIO_InitStruct);
 }
 
-/* ====================== Tasks ====================== */
-
-/* CubeMX-style: do USB init in a “default” task after the scheduler starts.
-   Then initialize the telemetry router and release a semaphore
-   so other tasks can proceed. */
-static void SetupSystem(void *argument) {
-  (void)argument;
-  /* Initialize USB device (creates RTOS resources internally) */
-  HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
-  MX_USB_Device_Init();
-  cdc_printf_init();
-
-  /* Initialize telemetry router AFTER USB is up (if it needs endpoints) */
-}
-static void init_router() {
-  SedsResult r = init_telemetry_router();
-  if (r != SEDS_OK) {
-    while (1) {
-      print_telemetry_error(r);
-    }
-    /* still continue to unlock, or block forever? choose to continue */
-  }
-  router_ready = 1;
-  HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
-}
-
-static void SensorTask(void *arg) {
-  (void)arg;
-
-  /* Wait until router is ready (and USB initialized) */
-
-  while (!router_ready) {
-    osDelay(MS_TO_TICKS(10));
-  }
-  if (gyro_init(&hspi1) != HAL_OK) {
-    die("gyro init failed\r\n");
-  }
-  if (init_barometer(&hspi1) != HAL_OK) {
-    die("barometer init failed\r\n");
-  }
-  if (accel_init(&hspi1) != HAL_OK) {
-    die("accel init failed\r\n");
-  }
-
-  float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
-  accel_data_t accel_vals = {0, 0, 0};
-  gyro_data_t data = {0, 0, 0};
-
-  for (;;) {
-    /* Read barometer */
-    HAL_StatusTypeDef st = get_temperature_pressure_altitude_non_blocking(
-        &hspi1, &barometer_pressure[1], &barometer_pressure[0],
-        &barometer_pressure[2]);
-    if (st != HAL_OK) {
-      printf("barometer read failed: %d\r\n", st);
-    }
-
-    /* Read gyro */
-    st = gyro_read(&hspi1, &data);
-    if (st != HAL_OK) {
-      printf("gyro read failed: %d\r\n", st);
-    }
-
-    /* Read accel */
-    st = accel_read(&hspi1, &accel_vals);
-    if (st != HAL_OK) {
-      printf("accel read failed: %d\r\n", st);
-    }
-
-    /* Log telemetry (async) */
-    SedsResult r;
-    r = log_telemetry_asynchronous(
-        SEDS_DT_BAROMETER_DATA, barometer_pressure,
-        (uint32_t)(sizeof(barometer_pressure) / sizeof(barometer_pressure[0])),
-        (uint32_t)sizeof(barometer_pressure[0]));
-
-    if (r != SEDS_OK) {
-      while (1) {
-        print_telemetry_error(r);
-      }
-    }
-
-    float gyro_vals[3];
-    gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
-
-    r = log_telemetry_asynchronous(
-        SEDS_DT_GYROSCOPE_DATA, gyro_vals,
-        (uint32_t)(sizeof(gyro_vals) / sizeof(gyro_vals[0])),
-        (uint32_t)sizeof(gyro_vals[0]));
-    if (r != SEDS_OK) {
-      while (1) {
-        print_telemetry_error(r);
-      }
-    }
-
-    r = log_telemetry_asynchronous(
-        SEDS_DT_ACCELEROMETER_DATA, &accel_vals,
-        (uint32_t)(sizeof(accel_vals) / sizeof(accel_vals.x)),
-        (uint32_t)sizeof(accel_vals.x));
-    if (r != SEDS_OK) {
-      while (1) {
-        print_telemetry_error(r);
-      }
-    }
-#ifdef DEBUG_PRINTS
-    vPrintHeapStats("SensorTask");
-#endif
-    /* 500 ms sample period */
-    osDelay(MS_TO_TICKS(15));
-  }
-}
-
-static void DispatchTask(void *arg) {
-  (void)arg;
-  init_router();
-
-  for (;;) {
-/* Drain router queues for ~1000 ms */
-#ifdef DEBUG_PRINTS
-    vPrintHeapStats("dispatch_task");
-#endif
-    SedsResult r = process_all_queues_timeout(0);
-    if (r != SEDS_OK) {
-      while (1) {
-        print_telemetry_error(r);
-      }
-    }
-    /* Yield a bit */
-    // osDelay(MS_TO_TICKS(2));
-  }
-}
 
 /* ====================== Error handling & CDC printf ====================== */
 
