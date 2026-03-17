@@ -220,6 +220,18 @@ static void init_router() {
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 }
 
+#include "platform.h"
+
+static struct gyro_config gyro_conf = {
+    .rng = Gyro_Range_2000Dps,
+    .bw = Gyro_532Hz_ODR_2000Hz,
+};
+
+static struct accl_config accl_conf = {
+    .mode = Normal_1600Hz,
+    .rng = Accl_Range_24g,
+};
+
 static void SensorTask(void *arg) {
   (void)arg;
 
@@ -228,19 +240,19 @@ static void SensorTask(void *arg) {
   while (!router_ready) {
     osDelay(MS_TO_TICKS(10));
   }
-  if (gyro_init(&hspi1) != HAL_OK) {
+  if (gyro_init(&hspi1, &gyro_conf) != HAL_OK) {
     die("gyro init failed\r\n");
   }
   if (init_barometer(&hspi1) != HAL_OK) {
     die("barometer init failed\r\n");
   }
-  if (accel_init(&hspi1) != HAL_OK) {
+  if (accl_init(&hspi1, &accl_conf) != HAL_OK) {
     die("accel init failed\r\n");
   }
 
   float barometer_pressure[3] = {100.0f, 100.0f, 100.0f};
-  accel_data_t accel_vals = {0, 0, 0};
-  gyro_data_t data = {0, 0, 0};
+  struct coords accel_vals = {0, 0, 0};
+  struct coords gyro_vals = {0, 0, 0};
 
   for (;;) {
     /* Read barometer */
@@ -252,13 +264,13 @@ static void SensorTask(void *arg) {
     }
 
     /* Read gyro */
-    st = gyro_read(&hspi1, &data);
+    st = gyro_read(&hspi1, &gyro_vals);
     if (st != HAL_OK) {
       printf("gyro read failed: %d\r\n", st);
     }
 
     /* Read accel */
-    st = accel_read(&hspi1, &accel_vals);
+    st = accl_read(&hspi1, &accel_vals);
     if (st != HAL_OK) {
       printf("accel read failed: %d\r\n", st);
     }
@@ -276,13 +288,10 @@ static void SensorTask(void *arg) {
       }
     }
 
-    float gyro_vals[3];
-    gyro_convert_to_dps(&data, &gyro_vals[0], &gyro_vals[1], &gyro_vals[2]);
-
     r = log_telemetry_asynchronous(
-        SEDS_DT_GYROSCOPE_DATA, gyro_vals,
-        (uint32_t)(sizeof(gyro_vals) / sizeof(gyro_vals[0])),
-        (uint32_t)sizeof(gyro_vals[0]));
+        SEDS_DT_GYROSCOPE_DATA, &gyro_vals,
+        (uint32_t)(sizeof(gyro_vals) / sizeof(gyro_vals.x)),
+        (uint32_t)sizeof(gyro_vals.x));
     if (r != SEDS_OK) {
       while (1) {
         print_telemetry_error(r);

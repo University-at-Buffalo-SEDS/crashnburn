@@ -1,137 +1,232 @@
 /*
- * Synchronous accelerometer driver over SPI.
+ * BMI088 Accelerometer driver over SPI.
  */
 
-#include <stdint.h>
+#include "platform.h"
 #include "accel.h"
-#include "stdio.h"
-#include "stm32g4xx_hal.h"
-#include "stm32g4xx_hal_def.h"
-#include "stm32g4xx_hal_spi.h"
 
-/* Write 1 byte to a register address */
-static inline HAL_StatusTypeDef accel_write_reg(SPI_HandleTypeDef *hspi,
-                                                uint8_t reg, uint8_t data) {
-  uint8_t buf[2] = {ACCEL_CMD_WRITE(reg), data};
-  ACCEL_CS_LOW();
-  HAL_StatusTypeDef st = HAL_SPI_Transmit(hspi, buf, sizeof(buf), HAL_MAX_DELAY);
-  ACCEL_CS_HIGH();
-  return st;
-}
 
-/* Single byte read from given register, must ignore dummy byte */
-static inline HAL_StatusTypeDef accel_read_reg(SPI_HandleTypeDef *hspi,
-                                               uint8_t reg, uint8_t *data) {
-  if (!data) return HAL_ERROR;
+/* ------ Synchronous SPI helpers ------ */
 
-  uint8_t tx[3] = {ACCEL_CMD_READ(reg), 0x00, 0x00};
-  uint8_t rx[3];
-
-  ACCEL_CS_LOW();
-  HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(tx), HAL_MAX_DELAY);
-  ACCEL_CS_HIGH();
-
-  if (st == HAL_OK) *data = rx[2];
-  return st;
-}
-
-/* Configure the accelerometer */
-HAL_StatusTypeDef accel_init(SPI_HandleTypeDef *hspi)
+/*
+ * Synchronously read one value at the specified register.
+ * Discards first dummy byte (datasheet section 6.1.2).
+ */
+static inline HAL_StatusTypeDef
+accl_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *val)
 {
-  HAL_StatusTypeDef status;
-  uint8_t id = 0x00;
-
-  ACCEL_CS_LOW();
-  HAL_Delay(1);
-  ACCEL_CS_HIGH();
-  HAL_Delay(50);
-
-  /* Soft reset */
-  status = accel_write_reg(hspi, ACCEL_RESET, ACCEL_RESET_VAL);
-  if (status != HAL_OK) return status;
-  HAL_Delay(50);
-
-  /* Dummy read (result ignored) */ 
-  status = accel_read_reg(hspi, ACCEL_CHIP_ADDR, &id);
-
-  /* WHO_AM_I should be 0x1E at 0x00 (taken directly from Gyro Driver) */ 
-  status = accel_read_reg(hspi, ACCEL_CHIP_ADDR, &id);
-  if (status != HAL_OK) return status;
-  if (id != ACCEL_CHIP_ID) {
-    printf("Accel WHOAMI mismatch: 0x%02X (exp 0x1E)\n", id);
+  if (!val) {
     return HAL_ERROR;
   }
 
-  /* Bandwith of low pass filter config to normal and ODR set to 1600hz */
-  status = accel_write_reg(hspi, ACCEL_CONF, NORMAL_1600HZ);
-  if (status != HAL_OK) return status;
+  HAL_StatusTypeDef st;
+  uint8_t tx[3] = { accl_cmd_read(reg), 0x00, 0x00 };
+  uint8_t rx[3];
 
-  /* Enable active mode */
-  status = accel_write_reg(hspi, ACCEL_PWR_CONF, ACTIVE_MODE);
-  if (status != HAL_OK) return status;
-  HAL_Delay(50);
+  accl_cs_low();
+  st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof tx, HAL_MAX_DELAY);
+  accl_cs_high();
 
-  /* Power on (enter normal mode) */
-  status = accel_write_reg(hspi, ACCEL_PWR_CTRL, ACCEL_ON);
-  if (status != HAL_OK) return status;
-  HAL_Delay(450);
+  if (st == HAL_OK) {
+    *val = rx[2];
+  }
 
-  /* Set range to ±24g */
-  status = accel_write_reg(hspi, ACCEL_RANGE, ACCEL_RANGE_24g);
-  if (status != HAL_OK) return status;
-  HAL_Delay(30);
+  return st;
+}
+
+/*
+ * Synchronously write new value to a specified writeable register. 
+ */
+static inline HAL_StatusTypeDef
+accl_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t data)
+{
+  HAL_StatusTypeDef st;
+  uint8_t buf[2] = { accl_cmd_write(reg), data };
+
+  accl_cs_low();
+  st = HAL_SPI_Transmit(hspi, buf, sizeof buf, HAL_MAX_DELAY);
+  accl_cs_high();
+
+  return st;
+}
+
+/*
+ * Read the accelerometer axes data (datasheet sections 5.3.4 & 6.1.2).
+ */
+HAL_StatusTypeDef
+accl_read(SPI_HandleTypeDef *hspi, struct coords *data)
+{
+  HAL_StatusTypeDef st;
+  uint8_t tx[ACCL_DMA_BUF_SIZE] = {[0] = accl_cmd_read(ACCL_X_LSB),
+                                   [1 ... 7] = 0x00};
+  uint8_t rx[ACCL_DMA_BUF_SIZE];
+
+  accl_cs_low();
+  st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof rx, HAL_MAX_DELAY);
+  accl_cs_high();
+  
+  if (st == HAL_OK) {
+    data->x = (float)(int16_t)((rx[3] << 8) | rx[2]) * MG;
+    data->y = (float)(int16_t)((rx[5] << 8) | rx[4]) * MG;
+    data->z = (float)(int16_t)((rx[7] << 8) | rx[6]) * MG;
+  }
+
+  return st;
+}
+
+
+/* ------ Initialization and testing ------ */
+
+/*
+ * Initializes accelerometer with specified parameters.
+ * Mode and range values can be found in accelerometer.h.
+ * Do not call from interrupts or callbacks. Idempotent.
+ */
+HAL_StatusTypeDef
+accl_init(SPI_HandleTypeDef *hspi, const struct accl_config *conf)
+{
+  HAL_StatusTypeDef st;
+  uint8_t id = 0x00;
+
+  accl_cs_low();
+  HAL_Delay(1);
+  accl_cs_high();
+  HAL_Delay(ACCL_WAIT_MS);
+
+  /* Soft reset (datasheet 4.8) */
+  st = accl_write_reg(hspi, ACCL_RESET, ACCL_RESET_VAL);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  HAL_Delay(ACCL_WAIT_MS);
+
+  /* Dummy read (result ignored) */ 
+  (void) accl_read_reg(hspi, ACCL_CHIP_ADDR, &id);
+
+  /* Match chip ID */ 
+  st = accl_read_reg(hspi, ACCL_CHIP_ADDR, &id);
+  if (st != HAL_OK) {
+    return st;
+  }
+  if (id != ACCL_CHIP_ID) {
+    die("ACCL: CHIP_ID=0x%02X (expected 0x1E)", id);
+    return HAL_ERROR;
+  }
+
+  /* Configuration setup with default fallbacks */
+  struct accl_config valid = {
+    .mode = Normal_1600Hz,
+    .rng  = Accl_Range_24g,
+  };
+
+  if (conf) {
+    if (conf->mode >= OSR4_100Hz &&
+        conf->mode <= Normal_1600Hz)
+    {
+      valid.mode = conf->mode;
+    }
+    if (conf->rng >= Accl_Range_3g &&
+        conf->rng <= Accl_Range_24g)
+    {
+      valid.rng = conf->rng;
+    }
+  }
+
+  /* Bandwith of low pass filter (datasheet 5.3.10) */
+  st = accl_write_reg(hspi, ACCL_CONF, (uint8_t)valid.mode);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  /* Set range (datasheet 5.3.11) */
+  st = accl_write_reg(hspi, ACCL_RANGE, (uint8_t)valid.rng);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  /* Set interrupt pin INT3 (PB0) to raise on new data */
+  st = accl_write_reg(hspi, ACCL_INT_CONF, ACCL_INT_CONF_VAL);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  st = accl_write_reg(hspi, ACCL_INT_MAP, ACCL_INT_MAP_VAL);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  /* Enable active mode (datasheet 5.3.20) */
+  st = accl_write_reg(hspi, ACCL_PWR_CONF, (uint8_t)Active_Mode);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  HAL_Delay(ACCL_WAIT_MS);
+
+  /* Power on (enter normal mode) (datasheet 3 & 4.1.1) */
+  st = accl_write_reg(hspi, ACCL_PWR_CTRL, (uint8_t)Accl_On);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  HAL_Delay(1);
 
   return HAL_OK;
 }
 
-/* Read the accelermoter axes data */
-HAL_StatusTypeDef accel_read(SPI_HandleTypeDef *hspi, accel_data_t *data) {
-  uint8_t tx[ACCEL_BUF_SIZE] = {[0] = ACCEL_CMD_READ(ACCEL_X_LSB),
-                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  uint8_t rx[ACCEL_BUF_SIZE];
-
-  ACCEL_CS_LOW();
-  HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(hspi, tx, rx, sizeof(rx), HAL_MAX_DELAY);
-  ACCEL_CS_HIGH();
-  
-  if (st == HAL_OK) {
-    data->x = (float)((rx[3] << 8) | rx[2]) * MG;
-    data->y = (float)((rx[5] << 8) | rx[4]) * MG;
-    data->z = (float)((rx[7] << 8) | rx[6]) * MG;
-  }
-  return st;
-}
-
-/* Perform self-test, write raw data to out, and reinitialize accelerometer */
-HAL_StatusTypeDef accel_selftest(SPI_HandleTypeDef *hspi, accel_data_t *out) {
+/*
+ * Perform self-test, write raw data to the argument struct,
+ * and reinitialize accelerometer (datasheet ch. 4.6.1).
+ * Do not call from interrupts or callbacks. Idempotent.
+ */
+HAL_StatusTypeDef
+accl_test(SPI_HandleTypeDef *hspi, struct coords *buf,
+          const struct accl_config *conf)
+{
   HAL_StatusTypeDef st;
-  accel_data_t data_p;
-  accel_data_t data_n;
+  struct coords data_p;
+  struct coords data_n;
 
-  st = accel_write_reg(hspi, ACCEL_CONF, ACCEL_TEST_CONF);
-  if (st != HAL_OK) return st;
+  st = accl_write_reg(hspi, ACCL_CONF, ACCL_TEST_CONF);
+  if (st != HAL_OK) {
+    return st;
+  }
+
   HAL_Delay(5);
 
-  st = accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_POS_POL);
-  if (st != HAL_OK) return st;
-  HAL_Delay(55);
+  st = accl_write_reg(hspi, ACCL_SELF_TEST, ACCL_POS_POL);
+  if (st != HAL_OK) {
+    return st;
+  }
 
-  st = accel_read(hspi, &data_p);
-  if (st != HAL_OK) return st;
+  HAL_Delay(ACCL_WAIT_MS);
 
-  st = accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_NEG_POL);
-  if (st != HAL_OK) return st;
-  HAL_Delay(55);
+  st = accl_read(hspi, &data_p);
+  if (st != HAL_OK) {
+    return st;
+  }
 
-  st = accel_read(hspi, &data_n);
-  if (st != HAL_OK) return st;
+  st = accl_write_reg(hspi, ACCL_SELF_TEST, ACCL_NEG_POL);
+  if (st != HAL_OK) {
+    return st;
+  }
 
-  st = accel_write_reg(hspi, ACCEL_SELF_TEST, ACCEL_TEST_OFF);
-  if (st != HAL_OK) return st;
+  HAL_Delay(ACCL_WAIT_MS);
 
-  out->x = (float)(data_p.x - data_n.x);
-  out->y = (float)(data_p.y - data_n.y);
-  out->z = (float)(data_p.z - data_n.z);
+  st = accl_read(hspi, &data_n);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  st = accl_write_reg(hspi, ACCL_SELF_TEST, ACCL_TEST_OFF);
+  if (st != HAL_OK) {
+    return st;
+  }
+
+  buf->x = (float)(data_p.x - data_n.x);
+  buf->y = (float)(data_p.y - data_n.y);
+  buf->z = (float)(data_p.z - data_n.z);
   
-  return accel_init(hspi);
+  return accl_init(hspi, conf);
 }
