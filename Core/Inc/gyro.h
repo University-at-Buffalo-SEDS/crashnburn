@@ -1,101 +1,66 @@
-/*
- * BMI088 Gyroscope configuration and API.
- */
-
-#ifndef GYROSCOPE_H
-#define GYROSCOPE_H
-
+#pragma once
+#include "stm32g4xx_hal.h"
 #include "main.h"
 
+/* --- BMI088 Gyro Register Addresses (datasheet) --- */
+#define GYRO_CHIP_ID 0x00 // expect 0x0F
+#define GYRO_RATE_X_LSB 0x02
+#define GYRO_RATE_X_MSB 0x03
+#define GYRO_RATE_Y_LSB 0x04
+#define GYRO_RATE_Y_MSB 0x05
+#define GYRO_RATE_Z_LSB 0x06
+#define GYRO_RATE_Z_MSB 0x07
+#define GYRO_INT_STAT_1 0x0A
+#define GYRO_FIFO_STATUS 0x0E
+#define GYRO_RANGE 0x0F
+#define GYRO_BANDWIDTH 0x10
+#define GYRO_LPM1 0x11
+#define GYRO_SOFTRESET 0x14
+#define GYRO_FIFO_CONFIG_0 0x3D
+#define GYRO_FIFO_CONFIG_1 0x3E
+#define GYRO_FIFO_DATA 0x3F
+#define GYRO_RANGE_DPS GYRO_RANGE_2000DPS
 
-/* ------ Register map ------ */
+/* WHO_AM_I value (gyro die) */
+#define GYRO_CHIP_ID_VALUE 0x0F // BMI088 gyro WHOAMI
+/* SPI command helpers (bit7=1 => read; bit7=0 => write) */
+#define GYRO_CMD_READ(reg) ((uint8_t)((reg) | 0x80u))
+#define GYRO_CMD_WRITE(reg) ((uint8_t)((reg) & ~0x80u))
 
-#define GYRO_CHIP_ID        0x00
-#define GYRO_INT_STAT_1     0x0A
-#define GYRO_FIFO_STATUS    0x0E
-#define GYRO_RANGE          0x0F
-#define GYRO_BANDWIDTH      0x10
-#define GYRO_LPM1           0x11
-#define GYRO_SOFTRESET      0x14
-#define GYRO_FIFO_CONFIG_0  0x3D
-#define GYRO_FIFO_CONFIG_1  0x3E
-#define GYRO_FIFO_DATA      0x3F
-#define GYRO_INT_CONF       0x16
-#define GYRO_INT_MAP        0x18
+typedef enum {
+  GYRO_RANGE_2000DPS = 0x00,
+  GYRO_RANGE_1000DPS = 0x01,
+  GYRO_RANGE_500DPS = 0x02,
+  GYRO_RANGE_250DPS = 0x03,
+  GYRO_RANGE_125DPS = 0x04
+} GyroRange;
 
-#define GYRO_RATE_X_LSB     0x02
-#define GYRO_RATE_X_MSB     0x03
-#define GYRO_RATE_Y_LSB     0x04
-#define GYRO_RATE_Y_MSB     0x05
-#define GYRO_RATE_Z_LSB     0x06
-#define GYRO_RATE_Z_MSB     0x07
+typedef enum {
+  GYRO_BW_523HZ_ODR_2000HZ = 0x00,
+  GYRO_BW_230HZ_ODR_2000HZ = 0x01,
+  GYRO_BW_116HZ_ODR_1000HZ = 0x02,
+  GYRO_BW_47HZ_ODR_400HZ = 0x03,
+  GYRO_BW_23HZ_ODR_200HZ = 0x04,
+  GYRO_BW_12HZ_ODR_100HZ = 0x05,
+  GYRO_BW_64HZ_ODR_200HZ = 0x06,
+  GYRO_BW_32HZ_ODR_100HZ = 0x07,
+} GyroBandwidth;
 
-#define GYRO_CHIP_ID_VALUE  0x0F
+typedef struct {
+  int16_t rate_x;
+  int16_t rate_y;
+  int16_t rate_z;
+} gyro_data_t;
 
-/* [0000] 0001 : INT3 to active high PP
-                 INT4 to active low  PP */
-#define GYRO_INT_CONF_VAL 0x01u
+HAL_StatusTypeDef gyro_write_register(SPI_HandleTypeDef *hspi, uint8_t reg,
+                                      uint8_t value);
+HAL_StatusTypeDef gyro_read_register(SPI_HandleTypeDef *hspi, uint8_t reg,
+                                     uint8_t *data);
+HAL_StatusTypeDef gyro_read_buffer(SPI_HandleTypeDef *hspi, uint8_t start_reg,
+                                   uint8_t *dst, uint16_t len);
+HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi);
+HAL_StatusTypeDef gyro_read(SPI_HandleTypeDef *hspi, gyro_data_t *gyro_data);
 
-/* 0000 0001 : INT3 mapped to new data
-               INT4 and FIFO unmapped   */
-#define GYRO_INT_MAP_VAL  0x01u
+float gyro_raw_to_dps(int16_t raw);
+void  gyro_convert_to_dps(const gyro_data_t *raw, float *x_dps, float *y_dps, float *z_dps);
 
-
-/* ------ Helper definitions ------ */
-
-#define gyro_cmd_read(reg)  ((uint8_t)((reg) | 0x80u))
-#define gyro_cmd_write(reg) ((uint8_t)((reg) & ~0x80u))
-
-#define gyro_cs_low()                                               \
-  HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_RESET)
-#define gyro_cs_high()                                              \
-  HAL_GPIO_WritePin(gyro_CS_GPIO_Port, gyro_CS_Pin, GPIO_PIN_SET)
-
-#define GYRO_DMA_BUF_SIZE 8
-#define GYRO_WAIT_MS      30
-
-/* ------ Enumerated configuration ------ */
-
-enum gyro_range {
-  Gyro_Range_2000Dps = 0x00,
-  Gyro_Range_1000Dps = 0x01,
-  Gyro_Range_500Dps  = 0x02,
-  Gyro_Range_250Dps  = 0x03,
-  Gyro_Range_125Dps  = 0x04,
-
-  Gyro_Range_Entries = 0x05
-};
-
-enum gyro_bandwidth {
-  Gyro_532Hz_ODR_2000Hz = 0x00,
-  Gyro_230Hz_ODR_2000Hz = 0x01,
-  Gyro_116Hz_ODR_1000Hz = 0x02,
-  Gyro_47Hz_ODR_400Hz   = 0x03,
-  Gyro_23Hz_ODR_200Hz   = 0x04,
-  Gyro_12Hz_ODR_100Hz   = 0x05,
-  Gyro_64Hz_ODR_200Hz   = 0x06,
-  Gyro_32Hz_ODR_100Hz   = 0x07,
-};
-
-struct gyro_config {
-  enum gyro_range rng;
-  enum gyro_bandwidth bw;
-};
-
-struct gyro_raw {
-  int16_t x, y, z;
-};
-
-
-/* ------ Public API ------ */
-
-struct coords;
-
-HAL_StatusTypeDef gyro_init(SPI_HandleTypeDef *hspi, const struct gyro_config *conf);
-HAL_StatusTypeDef gyro_read(SPI_HandleTypeDef *hspi, struct coords *buf);
-
-HAL_StatusTypeDef gyro_read_raw(SPI_HandleTypeDef *hspi, struct gyro_raw *data);
-void gyro_convert(const struct gyro_raw *raw, struct coords *buf);
-
-
-#endif // GYROSCOPE_H
